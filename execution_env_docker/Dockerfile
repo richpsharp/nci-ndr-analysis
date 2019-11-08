@@ -19,6 +19,7 @@ RUN conda run -v -n py37 conda install -c conda-forge gdal=2.4.1
 RUN conda run -v -n py37 pip install --no-cache-dir \
     cython \
     ecoshard==0.3.1 \
+    pygeoprocessing==1.9.0 \
     pytest \
     pytest-cov \
     mock \
@@ -29,7 +30,7 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
     setuptools-scm \
     shapely \
     sympy \
-    taskgraph && conda clean -a -y
+    taskgraph==0.8.5 && conda clean -a -y
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
 WORKDIR /var/workspace
