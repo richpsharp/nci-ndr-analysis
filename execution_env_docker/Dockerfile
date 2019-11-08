@@ -33,4 +33,4 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
 WORKDIR /var/workspace
-ENTRYPOINT /bin/bash -ic execute.sh
+ENTRYPOINT /bin/bash -i execute.sh
