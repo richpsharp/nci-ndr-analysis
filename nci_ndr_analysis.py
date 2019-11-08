@@ -18,7 +18,7 @@ import taskgraph
 
 DEM_URL = (
     'https://storage.googleapis.com/nci-ecoshards/'
-    'nci-ecoshards/global_dem_3s_blake2b_0532bf0a1bedbe5a98d1dc449a33ef0c.zip')
+    'global_dem_3s_blake2b_0532bf0a1bedbe5a98d1dc449a33ef0c.zip')
 
 WATERSHEDS_URL = (
     'https://storage.googleapis.com/nci-ecoshards/'
@@ -104,7 +104,7 @@ def main(n_workers):
             func=unzip_file,
             args=(path_map[path_zip_key], path_map[path_key]),
             target_path_list=[unzip_token_path],
-            depedent_task_list=[download_task_map[path_zip_key]],
+            dependent_task_list=[download_task_map[path_zip_key]],
             task_name='unzip %s' % path_zip_key)
 
     task_graph.join()
@@ -121,8 +121,8 @@ def unzip_file(zip_path, target_directory, token_file):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
-        'n_workers', metavar='N', type=int, default=-1,
+        'n_workers', type=int, default=-1,
         help='number of taskgraph workers to create')
 
     args = parser.parse_args()
-    main(args['n_workers'])
+    main(args.n_workers)
