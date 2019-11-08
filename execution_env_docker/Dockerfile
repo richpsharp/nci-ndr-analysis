@@ -1,7 +1,7 @@
 FROM conda/miniconda3
 
 # this builds nci/ndr-execution, should be run in the same directory as so:
-# docker run -it --rm -v `cwd`:/var/workspace nci/ndr-execution:[TAG]
+# docker run -it --rm -v `cwd`:/var/workspace nci/ndr-execution
 # the [TAG] is defined as the largest number in VERSION
 
 USER root
@@ -33,4 +33,4 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
 WORKDIR /var/workspace
-ENTRYPOINT python nci_ndr_analysis.py
+ENTRYPOINT /bin/bash -ic execute.sh
