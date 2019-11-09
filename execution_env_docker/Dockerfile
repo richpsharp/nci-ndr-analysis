@@ -19,7 +19,6 @@ RUN conda create -y --name py37 python=3.7 && conda clean -a -y
 RUN conda run -v -n py37 conda install -c conda-forge gdal=2.4.1
 RUN conda run -v -n py37 pip install --no-cache-dir \
     cython \
-    ecoshard==0.3.1 \
     pygeoprocessing==1.9.0 \
     pytest \
     pytest-cov \
@@ -32,6 +31,10 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
     shapely \
     sympy \
     taskgraph==0.8.5 && conda clean -a -y
+
+RUN conda run -v -n py37 pip install --no-cache-dir \
+    pip install git+git://github.com/natcap/ecoshard.git@427e4b9b9af5295216b1026021c7d5efebe3cb63 && \
+    conda clean -a -y
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
 WORKDIR /var/workspace
