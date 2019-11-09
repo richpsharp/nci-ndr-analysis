@@ -34,7 +34,7 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
 
 RUN conda run -v -n py37 pip install --upgrade pip && conda clean -a -y
 RUN conda run -v -n py37 pip install --no-cache-dir \
-    git+git://github.com/natcap/ecoshard.git@427e4b9b9af5295216b1026021c7d5efebe3cb63 && \
+    git+git://github.com/natcap/ecoshard.git@8066a11702911a44cc3c1a0002171a2d961d0b1b && \
     conda clean -a -y
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
