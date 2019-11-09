@@ -1,1 +1,1 @@
-python nci_ndr_analysis.py $0
+python nci_ndr_analysis.py $@
