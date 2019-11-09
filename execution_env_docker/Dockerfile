@@ -1,8 +1,9 @@
 FROM conda/miniconda3
 
-# this builds nci/ndr-execution, should be run in the same directory as so:
+# this builds nci/ndr-execution, should be run as so:
 # docker run -it --rm -v `cwd`:/var/workspace nci/ndr-execution
-# the [TAG] is defined as the largest number in VERSION
+# the version of this dockerfile is the one designed to run with the current
+# commit of this repository. There is otherwise no other versioning.
 
 USER root
 RUN apt-get update \
