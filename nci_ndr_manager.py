@@ -8,11 +8,13 @@ https://docs.google.com/document/d/
 """
 import argparse
 import datetime
+import glob
 import logging
 import os
 import sys
 import zipfile
 
+from osgeo import gdal
 import ecoshard
 import taskgraph
 
@@ -68,6 +70,17 @@ def main(n_workers):
         task_name='unzip %s' % watersheds_zip_path)
     task_graph.join()
     task_graph.close()
+
+    watersheds_root_dir = os.path.join(
+        watersheds_unzip_dir, 'watersheds_globe_HydroSHEDS_15arcseconds')
+    for watershed_shape_path in glob.glob(
+            os.path.join(watersheds_root_dir, '*.shp')):
+        watershed_vector = gdal.OpenEx(watershed_shape_path)
+        watershed_layer = watershed_vector.GetLayer()
+        for watershed_feature in watershed_layer:
+            LOGGER.debug(
+                '%s: %d', os.path.basename(watershed_shape_path),
+                watershed_feature.GetFID())
 
 
 def unzip_file(zip_path, target_directory, token_file):
