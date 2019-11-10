@@ -61,7 +61,7 @@ def main(n_workers):
         'scheduing unzip of: %s', watersheds_zip_path)
     watersheds_unzip_task = task_graph.add_task(
         func=unzip_file,
-        args=(watersheds_zip_path, watersheds_unzip_dir),
+        args=(watersheds_zip_path, watersheds_unzip_dir, unzip_token_path),
         target_path_list=[unzip_token_path],
         dependent_task_list=[watersheds_zip_fetch_task],
         task_name='unzip %s' % watersheds_zip_path)

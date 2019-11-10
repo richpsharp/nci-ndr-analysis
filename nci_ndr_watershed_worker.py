@@ -101,7 +101,7 @@ def main(n_workers):
             'scheduing unzip of %s: %s', path_key, path_map[path_key])
         download_task_map[path_key] = task_graph.add_task(
             func=unzip_file,
-            args=(path_map[path_zip_key], path_map[path_key]),
+            args=(path_map[path_zip_key], path_map[path_key], unzip_token_path),
             target_path_list=[unzip_token_path],
             dependent_task_list=[download_task_map[path_zip_key]],
             task_name='unzip %s' % path_zip_key)
