@@ -33,7 +33,7 @@ RUN conda run -v -n py37 pip install --no-cache-dir \
     taskgraph==0.8.5 && conda clean -a -y
 
 RUN conda run -v -n py37 pip install --no-cache-dir \
-    ecoshard==0.3.2 && \
+    ecoshard==0.3.3 && \
     conda clean -a -y
 
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
