@@ -54,7 +54,8 @@ def main(n_workers):
         args=(WATERSHEDS_URL, watersheds_zip_path),
         target_path_list=[watersheds_zip_path],
         task_name='download watersheds zip')
-    watersheds_unzip_dir = watersheds_zip_path.replace('.zip', '')
+    watersheds_unzip_dir = os.path.join(
+        CHURN_DIR, os.path.basename(watersheds_zip_path.replace('.zip', '')))
     unzip_token_path = os.path.join(
         CHURN_DIR, '%s.UNZIPTOKEN' % os.path.basename(watersheds_unzip_dir))
     LOGGER.debug(
