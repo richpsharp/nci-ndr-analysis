@@ -77,10 +77,11 @@ def main(n_workers):
             os.path.join(watersheds_root_dir, '*.shp')):
         watershed_vector = gdal.OpenEx(watershed_shape_path)
         watershed_layer = watershed_vector.GetLayer()
+        LOGGER.debug('processing watershed %s', watershed_shape_path)
         for watershed_feature in watershed_layer:
-            LOGGER.debug(
-                '%s: %d', os.path.basename(watershed_shape_path),
-                watershed_feature.GetFID())
+            fid = watershed_feature.GetFID()
+        LOGGER.debug('all done %d', fid)
+    LOGGER.debug('all done with all')
 
 
 def unzip_file(zip_path, target_directory, token_file):
