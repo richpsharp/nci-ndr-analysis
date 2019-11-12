@@ -110,7 +110,7 @@ def main():
 
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
-        args=(WORKER_QUEUE))
+        args=(WORKER_QUEUE,))
     schedule_worker_thread.start()
 
 
