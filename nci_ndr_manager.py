@@ -191,7 +191,7 @@ def create_status_database(
         'VALUES (?, ?, ?, ?, ?)')
 
     for watershed_shape_path in glob.glob(
-            os.path.join(watersheds_dir_path, '*.shp'), recursive=True):
+            os.path.join(watersheds_dir_path, '**.shp'), recursive=True):
         watershed_vector = gdal.OpenEx(watershed_shape_path)
         watershed_layer = watershed_vector.GetLayer()
         LOGGER.debug('processing watershed %s', watershed_shape_path)
