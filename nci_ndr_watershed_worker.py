@@ -17,6 +17,8 @@ import zipfile
 
 import ecoshard
 import flask
+import requests
+import retrying
 import taskgraph
 
 DEM_URL = (
@@ -177,6 +179,7 @@ def get_status(session_id):
         return str(e), 500
 
 
+@retrying.retry()
 def ndr_worker(work_queue):
     """Run the NDR model.
 
@@ -198,6 +201,16 @@ def ndr_worker(work_queue):
         payload = work_queue.get()
         LOGGER.debug(
             'would run right now if implemented %s', payload)
+        watershed_path, fid, bucket_id, callback_url, session_id = payload
+        data_payload = {
+            'workspace_url': 'TEST_URL'
+        }
+        response = requests.post(callback_url, data=data_payload)
+        if not response.ok:
+            LOGGER.error(
+                'something bad happened when scheduling worker: %s',
+                str(response))
+
         # create local workspace
         # extract the watershed to workspace/data
         # clip/extract/project the DEM, precip, lulc, fert. to local workspace
@@ -226,7 +239,6 @@ def ndr_worker(work_queue):
         #         GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
         #     'n_workers': -1
         # }
-    return 'JSON posted'
 
 
 if __name__ == '__main__':

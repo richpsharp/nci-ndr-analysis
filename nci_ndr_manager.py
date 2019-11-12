@@ -22,6 +22,7 @@ import flask
 from osgeo import gdal
 import ecoshard
 import requests
+import retrying
 import shapely.strtree
 import shapely.wkb
 import taskgraph
@@ -233,6 +234,8 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
     payload = flask.request.get_json()
     workspace_url = payload['workspace_url']
     WORKER_QUEUE.put(worker_ip_port)
+    connection = None
+    cursor = None
     while True:
         try:
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
@@ -249,6 +252,10 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
             LOGGER.exception(
                 'exception when inserting %s:%d, trying again',
                 watershed_basename, fid)
+            if connection:
+                connection.commit()
+            if cursor:
+                cursor.close()
     LOGGER.debug('%s:%d complete', watershed_basename, fid)
 
 
