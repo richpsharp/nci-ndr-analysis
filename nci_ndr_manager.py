@@ -190,8 +190,8 @@ def create_status_database(
         'workspace_url) '
         'VALUES (?, ?, ?, ?, ?)')
 
-    for watershed_shape_path in pathlib.Path(
-            watersheds_dir_path).rglob('*.shp'):
+    for watershed_shape_path in [str(p) for p in pathlib.Path(
+            watersheds_dir_path).rglob('*.shp')]:
         LOGGER.debug('watershed shape path: %s', watershed_shape_path)
         watershed_vector = gdal.OpenEx(watershed_shape_path, gdal.OF_VECTOR)
         watershed_layer = watershed_vector.GetLayer()
