@@ -227,6 +227,7 @@ def create_status_database(
         if job_status_list:
             LOGGER.debug('inserting %s watersheds into DB', watershed_basename)
             cursor.executemany(insert_query, job_status_list)
+        break  # FOR DEBUGGING
     LOGGER.debug('all done with watersheds')
 
     cursor.close()
