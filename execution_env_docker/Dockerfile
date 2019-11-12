@@ -7,25 +7,25 @@ FROM conda/miniconda3
 
 USER root
 RUN apt-get update \
-&& apt-get install -y \
-    build-essential \
-    git \
-    libspatialindex-c4v5 \
-    mercurial \
-&& rm -rf /var/lib/apt/lists/*
+    && apt-get install -y \
+        build-essential \
+        git \
+        libspatialindex-c4v5 \
+        mercurial \
+    && rm -rf /var/lib/apt/lists/*
 
 SHELL ["/bin/bash", "-c"]
 RUN conda create -y --name py37 python=3.7 && conda clean -a -y
-RUN conda run -v -n py37 conda install -c conda-forge gdal=2.4.1
+RUN conda init bash && echo "source activate py37" > ~/.bashrc
+RUN conda install -c conda-forge gdal=2.4.1
 COPY requirements.txt .
-RUN conda run -v -n py37 pip install --no-cache-dir -r requirements.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     && conda clean -a -y
 
-RUN conda run -v -n py37 pip install --ignore-installed --no-cache-dir \
+RUN pip install --ignore-installed --no-cache-dir \
     git+git://github.com/natcap/ecoshard.git@3b92d5925e8502f7536f1d51ba6fc404687c2926 && \
     conda clean -a -y
 
-RUN conda init bash && echo "source activate py37" > ~/.bashrc
 WORKDIR /var/workspace
 ENTRYPOINT ["/bin/bash", "-i", "execute.sh"]
 CMD []
