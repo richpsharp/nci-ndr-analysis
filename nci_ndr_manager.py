@@ -14,6 +14,7 @@ import pathlib
 import queue
 import sqlite3
 import sys
+import time
 import zipfile
 
 import flask
@@ -199,7 +200,13 @@ def create_status_database(
         watershed_basename = os.path.splitext(
             os.path.basename(watershed_shape_path))[0]
         job_status_list = []
-        for watershed_feature in watershed_layer:
+        last_time = time.time()
+        for index, watershed_feature in enumerate(watershed_layer):
+            if time.time() - last_time > 5.0:
+                last_time = time.time()
+                LOGGER.debug(
+                    '%.2f%% complete',
+                    100. * index/float(watershed_layer.GetFeatureCount()))
             fid = watershed_feature.GetFID()
             watershed_geom = shapely.wkb.loads(
                 watershed_feature.GetGeometryRef().ExportToWkb())
