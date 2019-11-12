@@ -14,6 +14,7 @@ import pathlib
 import queue
 import sqlite3
 import sys
+import threading
 import time
 import zipfile
 
@@ -46,6 +47,7 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 WORKER_QUEUE = queue.Queue()
+SCHEDULED_SET = set()
 APP = flask.Flask(__name__)
 
 
@@ -104,6 +106,11 @@ def main(n_workers):
 
     task_graph.join()
     task_graph.close()
+
+    schedule_worker_thread = threading.Thread(
+        target=schedule_worker,
+        args=(WORKER_QUEUE))
+    schedule_worker_thread.start()
 
 
 def unzip_file(zip_path, target_directory, token_file):
@@ -235,8 +242,8 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
                 'SET workspace_url=?, job_status=\'DEBUG\' '
                 'WHERE watershed_basename=? AND fid=?',
                 (workspace_url, watershed_basename, fid))
-            cursor.commit()
             cursor.close()
+            connection.commit()
             break
         except Exception:
             LOGGER.exception(
@@ -245,52 +252,68 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
     LOGGER.debug('%s:%d complete', watershed_basename, fid)
 
 
-def scheduler(worker_queue):
+@retrying.retry()
+def schedule_worker(worker_queue):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
 
     """
-    while True:
-        try:
-            connection = sqlite3.connect(STATUS_DATABASE_PATH)
-            cursor = connection.cursor()
-            cursor.execute(
-                'SELECT watershed_basename, fid '
-                'WHERE job_status=\'PRESCHEDULED\'')
-            for payload in cursor.fetchall():
-                watershed_basename, fid = payload
-                worker_ip_port = WORKER_QUEUE.get()
-                callback_url = flask.url_for(
-                    'processing_complete', _external=True,
-                    watershed_basename=watershed_basename, fid=fid,
-                    worker_ip_port=worker_ip_port)
+    connection = sqlite3.connect(
+        'file://%s?mode=ro' % STATUS_DATABASE_PATH, uri=True)
+    cursor = connection.cursor()
+    try:
+        cursor.execute(
+            'SELECT watershed_basename, fid '
+            'WHERE job_status=\'PRESCHEDULED\'')
+        for payload in cursor.fetchall():
+            watershed_basename, fid = payload
+            if (watershed_basename, fid) in SCHEDULED_SET:
+                LOGGER.warning(
+                    '%s already in schedule', (watershed_basename, fid))
+            worker_ip_port = worker_queue.get()
+            callback_url = flask.url_for(
+                'processing_complete', _external=True,
+                watershed_basename=watershed_basename, fid=fid,
+                worker_ip_port=worker_ip_port)
 
-                data_payload = {
-                    'watershed_basename': watershed_basename,
-                    'fid': fid,
-                    'bucket_id': 'NOBUCKET',
-                    'callback_url': callback_url,
-                }
+            data_payload = {
+                'watershed_basename': watershed_basename,
+                'fid': fid,
+                'bucket_id': 'NOBUCKET',
+                'callback_url': callback_url,
+            }
 
-                worker_rest_url = (
-                    'http://%s/api/v1/run_ndr' % worker_ip_port)
-                response = requests.post(
-                    worker_rest_url, data=data_payload)
-                if response.ok:
-                    WORKER_QUEUE.put(worker_ip_port)
-                    break
+            # send job
+            worker_rest_url = (
+                'http://%s/api/v1/run_ndr' % worker_ip_port)
+            response = requests.post(worker_rest_url, data=data_payload)
+            if response.ok:
+                SCHEDULED_SET.add((watershed_basename, fid))
+            else:
+                LOGGER.error(
+                    'something bad happened when scheduling worker: %s',
+                    str(response))
+        cursor.close()
+        connection.commit()
 
-        except Exception:
-            LOGGER.exception('exception in scheduler')
+    except Exception:
+        LOGGER.exception('exception in scheduler')
+        if cursor:
+            cursor.close()
+        if connection:
+            connection.commit()
+        raise
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
-        'n_workers', type=int, default=-1,
-        help='number of taskgraph workers to create')
+        'app_port', type=int, default=8080,
+        help='port to listen on for callback complete')
 
     args = parser.parse_args()
+    # TODO: this localhost:8888 is a test server
     WORKER_QUEUE.put('localhost:8888')
     main(args.n_workers)
+    APP.run(host='0.0.0.0', port=args.app_port)
