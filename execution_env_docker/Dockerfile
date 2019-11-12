@@ -17,7 +17,7 @@ RUN apt-get update \
 SHELL ["/bin/bash", "-c"]
 RUN conda create -y --name py37 python=3.7; conda clean -a -y
 RUN conda init bash; echo "source activate py37" > ~/.bashrc
-RUN /bin/bash -c "source ~/.bashrc; conda install -c conda-forge gdal=2.4.1"
+RUN /bin/bash -c "source ~/.bashrc; conda info; conda install -c conda-forge gdal=2.4.1"
 COPY requirements.txt .
 RUN /bin/bash -c "source ~/.bashrc; conda activate py37; \
     pip install --no-cache-dir -r requirements.txt; conda clean -a -y"
