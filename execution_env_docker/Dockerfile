@@ -14,7 +14,7 @@ RUN apt-get update \
         mercurial \
     && rm -rf /var/lib/apt/lists/*
 
-SHELL ["/bin/bash", "-c"]
+SHELL ["/bin/bash", "-i"]
 RUN conda create -y --name py37 python=3.7 && conda clean -a -y
 RUN conda init bash && echo "source activate py37" > ~/.bashrc
 RUN conda install -c conda-forge gdal=2.4.1
