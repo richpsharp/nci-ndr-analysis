@@ -17,6 +17,7 @@ RUN apt-get update \
 SHELL ["/bin/bash", "-c"]
 RUN conda create -y --name py37 python=3.7 && conda clean -a -y
 RUN conda run -v -n py37 conda install -c conda-forge gdal=2.4.1
+CP ../requirements.txt .
 RUN conda run -v -n py37 pip install --no-cache-dir -r requirements.txt \
     && conda clean -a -y
 
