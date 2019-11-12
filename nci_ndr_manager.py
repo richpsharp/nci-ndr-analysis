@@ -165,9 +165,9 @@ def create_status_database(
     for feature in world_borders_layer:
         geom = shapely.wkb.loads(
             feature.GetGeometryRef().ExportToWkb())
-        prep_geom = shapely.prepared.prep(geom)
-        prep_geom.country_name = feature.GetField('NAME')
-        world_border_polygon_list.append(prep_geom)
+        geom.prep_geom = shapely.prepared.prep(geom)
+        geom.country_name = feature.GetField('NAME')
+        world_border_polygon_list.append(geom)
 
     str_tree = shapely.strtree.STRtree(world_border_polygon_list)
     insert_query = (
@@ -197,7 +197,7 @@ def create_status_database(
                 watershed_feature.GetGeometryRef().ExportToWkb())
             name_list = []
             for intersect_geom in str_tree.query(watershed_geom):
-                if intersect_geom.intersects(watershed_geom):
+                if intersect_geom.prep_geom.intersects(watershed_geom):
                     name_list.append(intersect_geom.country_name)
             country_names = ','.join(name_list)
             job_status_list.append(
