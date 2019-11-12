@@ -167,7 +167,7 @@ def create_status_database(
             watershed_area_deg REAL NOT NULL,
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
-            workspace_url TEXT NOT NULL);
+            workspace_url TEXT);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -218,9 +218,9 @@ def create_status_database(
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
                  country_names, None))
-            if index % 10000 == 0:
+            if (index+1) % 10000 == 0:
                 LOGGER.debug(
-                    'every 100 inserting %s watersheds into DB',
+                    'every 10000 inserting %s watersheds into DB',
                     watershed_basename)
                 cursor.executemany(insert_query, job_status_list)
                 job_status_list = []
