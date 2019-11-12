@@ -164,6 +164,7 @@ def create_status_database(
         CREATE TABLE job_status (
             watershed_basename TEXT NOT NULL,
             fid INT NOT NULL,
+            watershed_area_deg REAL NOT NULL,
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
             workspace_url TEXT NOT NULL);
@@ -187,9 +188,8 @@ def create_status_database(
     str_tree = shapely.strtree.STRtree(world_border_polygon_list)
     insert_query = (
         'INSERT INTO job_status('
-        'watershed_basename, fid, job_status, country_list, '
-        'workspace_url) '
-        'VALUES (?, ?, ?, ?, ?)')
+        'watershed_basename, fid, watershed_area_deg, job_status, '
+        'country_list, workspace_url) VALUES (?, ?, ?, ?, ?, ?)')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
             watersheds_dir_path).rglob('*.shp')]:
@@ -216,8 +216,8 @@ def create_status_database(
                     name_list.append(intersect_geom.country_name)
             country_names = ','.join(name_list)
             job_status_list.append(
-                (watershed_basename, fid, 'PRESCHEDULED', country_names,
-                 None))
+                (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
+                 country_names, None))
         LOGGER.debug('inserting %s watersheds into DB', watershed_basename)
         cursor.executemany(insert_query, job_status_list)
     LOGGER.debug('all done with watersheds')
