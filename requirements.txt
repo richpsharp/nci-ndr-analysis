@@ -1,6 +1,5 @@
 ecoshard
 flask
-flask-restful
-pygeoprocessing
+pygeoprocessing==1.9.0
 requests
-taskgraph
+taskgraph==0.8.5
