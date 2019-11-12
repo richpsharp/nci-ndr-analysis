@@ -105,31 +105,6 @@ def main(n_workers):
     task_graph.join()
     task_graph.close()
 
-    # callback_url = flask.url_for(
-    #     'processing_complete', _external=True,
-    #     watershed_basename=watershed_basename, fid=fid)
-    # data_payload = {
-    #     'watershed_path': watershed_shape_path,
-    #     'fid': fid,
-    #     'bucket_id': 'NOBUCKET',
-    #     'callback_url': callback_url,
-    # }
-    # while True:
-    #     try:
-    #         LOGGER.debug(
-    #             'fetching a worker for %s:%s', watershed_shape_path,
-    #             fid)
-    #         worker_ip_port = WORKER_QUEUE.get()
-    #         worker_rest_url = (
-    #             'http://%s/api/v1/run_ndr' % worker_ip_port)
-    #         response = requests.post(
-    #             worker_rest_url, data=data_payload)
-    #         if response.ok:
-    #             WORKER_QUEUE.put(worker_ip_port)
-    #             break
-    #     except Exception:
-    #         LOGGER.exception('something bad happened')
-
 
 def unzip_file(zip_path, target_directory, token_file):
     """Unzip contents of `zip_path` into `target_directory`."""
@@ -238,7 +213,7 @@ def create_status_database(
 
 
 @APP.route('/api/v1/processing_complete', methods=['POST'])
-def processing_complete(watershed_basename, fid):
+def processing_complete(watershed_basename, fid, worker_ip_port):
     """Invoked when processing is complete for given watershed.
 
     Body of the post includs a url to the stored .zip file of the archive.
@@ -250,12 +225,14 @@ def processing_complete(watershed_basename, fid):
     LOGGER.debug('updating %s:%d complete', watershed_basename, fid)
     payload = flask.request.get_json()
     workspace_url = payload['workspace_url']
+    WORKER_QUEUE.put(worker_ip_port)
     while True:
         try:
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
             cursor = connection.cursor()
             cursor.execute(
-                'UPDATE job_status set workspace_url=? '
+                'UPDATE job_status '
+                'SET workspace_url=?, job_status=\'DEBUG\' '
                 'WHERE watershed_basename=? AND fid=?',
                 (workspace_url, watershed_basename, fid))
             cursor.commit()
@@ -268,6 +245,46 @@ def processing_complete(watershed_basename, fid):
     LOGGER.debug('%s:%d complete', watershed_basename, fid)
 
 
+def scheduler(worker_queue):
+    """Monitors STATUS_DATABASE_PATH and schedules work.
+
+    Parameters:
+
+    """
+    while True:
+        try:
+            connection = sqlite3.connect(STATUS_DATABASE_PATH)
+            cursor = connection.cursor()
+            cursor.execute(
+                'SELECT watershed_basename, fid '
+                'WHERE job_status=\'PRESCHEDULED\'')
+            for payload in cursor.fetchall():
+                watershed_basename, fid = payload
+                worker_ip_port = WORKER_QUEUE.get()
+                callback_url = flask.url_for(
+                    'processing_complete', _external=True,
+                    watershed_basename=watershed_basename, fid=fid,
+                    worker_ip_port=worker_ip_port)
+
+                data_payload = {
+                    'watershed_basename': watershed_basename,
+                    'fid': fid,
+                    'bucket_id': 'NOBUCKET',
+                    'callback_url': callback_url,
+                }
+
+                worker_rest_url = (
+                    'http://%s/api/v1/run_ndr' % worker_ip_port)
+                response = requests.post(
+                    worker_rest_url, data=data_payload)
+                if response.ok:
+                    WORKER_QUEUE.put(worker_ip_port)
+                    break
+
+        except Exception:
+            LOGGER.exception('exception in scheduler')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
@@ -277,4 +294,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
     WORKER_QUEUE.put('localhost:8888')
     main(args.n_workers)
-    # TODO: for debugging
