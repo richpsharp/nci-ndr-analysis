@@ -22,7 +22,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt \
     && conda clean -a -y
 
-RUN pip install --ignore-installed --no-cache-dir \
+RUN pip install --no-dependencies --ignore-installed --no-cache-dir \
     git+git://github.com/natcap/ecoshard.git@3b92d5925e8502f7536f1d51ba6fc404687c2926 && \
     conda clean -a -y
 
