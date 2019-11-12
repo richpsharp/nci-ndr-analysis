@@ -201,7 +201,8 @@ def create_status_database(
         job_status_list = []
         for watershed_feature in watershed_layer:
             fid = watershed_feature.GetFID()
-            watershed_geom = watershed_feature.GetGeometryRef()
+            watershed_geom = shapely.wkb.load(
+                watershed_feature.GetGeometryRef().ExportToWkb())
             name_list = []
             for intersect_geom in str_tree.query(watershed_geom):
                 if intersect_geom.intersects(watershed_geom):
