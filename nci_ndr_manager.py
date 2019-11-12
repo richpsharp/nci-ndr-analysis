@@ -165,8 +165,9 @@ def create_status_database(
     for feature in world_borders_layer:
         geom = shapely.wkb.loads(
             feature.GetGeometryRef().ExportToWkb())
-        geom.country_name = feature.GetField('NAME')
-        world_border_polygon_list.append(geom)
+        prep_geom = shapely.prepared.prep(geom)
+        prep_geom.country_name = feature.GetField('NAME')
+        world_border_polygon_list.append(prep_geom)
 
     str_tree = shapely.strtree.STRtree(world_border_polygon_list)
     insert_query = (
