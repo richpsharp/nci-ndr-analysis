@@ -8,9 +8,9 @@ https://docs.google.com/document/d/
 """
 import argparse
 import datetime
-import glob
 import logging
 import os
+import pathlib
 import queue
 import sqlite3
 import sys
@@ -190,8 +190,8 @@ def create_status_database(
         'workspace_url) '
         'VALUES (?, ?, ?, ?, ?)')
 
-    for watershed_shape_path in glob.glob(
-            os.path.join(watersheds_dir_path, '**.shp'), recursive=True):
+    for watershed_shape_path in pathlib.Path(
+            watersheds_dir_path).rglob('*.shp'):
         watershed_vector = gdal.OpenEx(watershed_shape_path)
         watershed_layer = watershed_vector.GetLayer()
         LOGGER.debug('processing watershed %s', watershed_shape_path)
