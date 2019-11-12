@@ -205,8 +205,9 @@ def create_status_database(
             if time.time() - last_time > 5.0:
                 last_time = time.time()
                 LOGGER.debug(
-                    '%.2f%% complete',
-                    100. * index/float(watershed_layer.GetFeatureCount()))
+                    '%.2f%% (%d) complete',
+                    100. * index/float(watershed_layer.GetFeatureCount()),
+                    index+1)
             fid = watershed_feature.GetFID()
             watershed_geom = shapely.wkb.loads(
                 watershed_feature.GetGeometryRef().ExportToWkb())
