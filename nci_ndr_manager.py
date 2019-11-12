@@ -218,12 +218,22 @@ def create_status_database(
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
                  country_names, None))
-        LOGGER.debug('inserting %s watersheds into DB', watershed_basename)
-        cursor.executemany(insert_query, job_status_list)
+            if index % 10000 == 0:
+                LOGGER.debug(
+                    'every 100 inserting %s watersheds into DB',
+                    watershed_basename)
+                cursor.executemany(insert_query, job_status_list)
+                job_status_list = []
+        if job_status_list:
+            LOGGER.debug('inserting %s watersheds into DB', watershed_basename)
+            cursor.executemany(insert_query, job_status_list)
     LOGGER.debug('all done with watersheds')
 
     cursor.close()
     connection.commit()
+
+    with open(complete_token_path, 'w') as token_file:
+        token_file.write(str(datetime.datetime.now()))
 
 
 @APP.route('/api/v1/processing_complete', methods=['POST'])
