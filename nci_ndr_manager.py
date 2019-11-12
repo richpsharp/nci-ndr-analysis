@@ -52,7 +52,7 @@ SCHEDULED_SET = set()
 APP = flask.Flask(__name__)
 
 
-def main(n_workers):
+def main():
     """Entry point."""
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
         try:
@@ -60,7 +60,7 @@ def main(n_workers):
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, n_workers)
+    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, 0)
     # download countries
     country_borders_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(COUNTRY_BORDERS_URL))
@@ -323,5 +323,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     # TODO: this localhost:8888 is a test server
     WORKER_QUEUE.put('localhost:8888')
-    main(args.n_workers)
+    main()
     APP.run(host='0.0.0.0', port=args.app_port)
