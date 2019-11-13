@@ -220,7 +220,7 @@ def ndr_worker(work_queue):
 
             # extract the watershed to workspace/data
             watershed_root_path = os.path.join(
-                CHURN_DIR,
+                ECOSHARD_DIR,
                 'watersheds_globe_HydroSHEDS_15arcseconds_'
                 'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
                 'watersheds_globe_HydroSHEDS_15arcseconds',
