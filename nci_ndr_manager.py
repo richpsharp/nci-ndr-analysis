@@ -271,15 +271,18 @@ def schedule_worker(worker_queue):
     Parameters:
 
     """
+    LOGGER.debug('launching schedule_worker')
     connection = sqlite3.connect(
         'file://%s?mode=ro' % STATUS_DATABASE_PATH, uri=True)
     cursor = connection.cursor()
     try:
+        LOGGER.debug('querying prescheduled')
         cursor.execute(
             'SELECT watershed_basename, fid '
             'WHERE job_status=\'PRESCHEDULED\'')
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
+            LOGGER.debug('scheduling %s %d', watershed_basename, fid)
             if (watershed_basename, fid) in SCHEDULED_SET:
                 LOGGER.warning(
                     '%s already in schedule', (watershed_basename, fid))
@@ -299,6 +302,7 @@ def schedule_worker(worker_queue):
             # send job
             worker_rest_url = (
                 'http://%s/api/v1/run_ndr' % worker_ip_port)
+            LOGGER.debug('sending job %s to %s', data_payload, worker_rest_url)
             response = requests.post(worker_rest_url, data=data_payload)
             if response.ok:
                 SCHEDULED_SET.add((watershed_basename, fid))
