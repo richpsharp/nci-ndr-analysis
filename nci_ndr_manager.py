@@ -269,6 +269,7 @@ def processing_complete():
             if cursor:
                 cursor.close()
     LOGGER.debug('%s:%d complete', watershed_basename, fid)
+    return 202
 
 
 @retrying.retry()
