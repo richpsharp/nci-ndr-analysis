@@ -15,8 +15,12 @@ import threading
 import uuid
 import zipfile
 
+from osgeo import gdal
+from osgeo import ogr
+from osgeo import osr
 import ecoshard
 import flask
+import numpy
 import requests
 import retrying
 import taskgraph
@@ -118,6 +122,8 @@ def main(n_workers):
             dependent_task_list=[download_task_map[path_zip_key]],
             task_name='unzip %s' % path_zip_key)
 
+    # TODO: create DEM VRT
+
     task_graph.join()
 
 
@@ -201,7 +207,32 @@ def ndr_worker(work_queue):
         payload = work_queue.get()
         LOGGER.debug(
             'would run right now if implemented %s', payload)
-        watershed_path, fid, bucket_id, callback_url, session_id = payload
+        (watershed_basename, watershed_fid, bucket_id,
+         callback_url, session_id) = payload
+
+        # create local workspace
+        ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
+        local_workspace = os.path.join(
+            WORKSPACE_DIR, ws_prefix)
+        try:
+            os.makedirs(local_workspace)
+        except OSError:
+            LOGGER.exception('unable to create %s', local_workspace)
+
+        # extract the watershed to workspace/data
+        watershed_root_path = os.path.join(
+            CHURN_DIR,
+            'watersheds_globe_HydroSHEDS_15arcseconds_'
+            'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
+            'watersheds_globe_HydroSHEDS_15arcseconds',
+            '%s.shp' % watershed_basename)
+        epsg_srs = get_utm_epsg_srs(watershed_root_path, watershed_fid)
+        local_watershed_path = os.path.join(
+            local_workspace, '%s.gpkg' % ws_prefix)
+
+        reproject_geometry_to_target(
+            watershed_fid, epsg_srs.ExportToWkt(), local_watershed_path)
+
         data_payload = {
             'workspace_url': 'TEST_URL'
         }
@@ -211,8 +242,6 @@ def ndr_worker(work_queue):
                 'something bad happened when scheduling worker: %s',
                 str(response))
 
-        # create local workspace
-        # extract the watershed to workspace/data
         # clip/extract/project the DEM, precip, lulc, fert. to local workspace
         # construct the args dict
         # call NDR
@@ -241,18 +270,114 @@ def ndr_worker(work_queue):
         # }
 
 
+def reproject_geometry_to_target(
+        vector_path, feature_id, target_sr_wkt, target_path):
+    """Reproject a single OGR DataSource feature.
+
+    Transforms the features of the base vector to the desired output
+    projection in a new ESRI Shapefile.
+
+    Parameters:
+        vector_path (str): path to vector
+        feature_id (int): feature ID to reproject.
+        target_sr_wkt (str): the desired output projection in Well Known Text
+            (by layer.GetSpatialRef().ExportToWkt())
+        feature_id (int): the feature to reproject and copy.
+        target_path (str): the filepath to the transformed shapefile
+
+    Returns:
+        None
+
+    """
+    vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+    layer = vector.GetLayer()
+    feature = layer.GetFeature(feature_id)
+    geom = feature.GetGeometryRef()
+    geom_wkb = geom.ExportToWkb()
+    base_sr_wkt = geom.GetSpatialReference().ExportToWkt()
+    geom = None
+    feature = None
+    layer = None
+    vector = None
+
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    # if this file already exists, then remove it
+    if os.path.isfile(target_path):
+        LOGGER.warn(
+            "reproject_vector: %s already exists, removing and overwriting",
+            target_path)
+        os.remove(target_path)
+
+    target_sr = osr.SpatialReference(target_sr_wkt)
+
+    # create a new shapefile from the orginal_datasource
+    target_driver = gdal.GetDriverByName('GPKG')
+    target_vector = target_driver.Create(
+        target_path, 0, 0, 0, gdal.GDT_Unknown)
+    layer_name = os.path.splitext(os.path.basename(target_path))[0]
+    base_geom = ogr.CreateGeometryFromWkb(geom_wkb)
+    target_layer = target_vector.CreateLayer(
+        layer_name, target_sr, base_geom.GetGeometryType())
+
+    # Create a coordinate transformation
+    base_sr = osr.SpatialReference(base_sr_wkt)
+    coord_trans = osr.CoordinateTransformation(base_sr, target_sr)
+
+    # Transform geometry into format desired for the new projection
+    error_code = base_geom.Transform(coord_trans)
+    if error_code != 0:  # error
+        # this could be caused by an out of range transformation
+        # whatever the case, don't put the transformed poly into the
+        # output set
+        raise ValueError(
+            "Unable to reproject geometry on %s." % target_path)
+
+    # Copy original_datasource's feature and set as new shapes feature
+    target_feature = ogr.Feature(target_layer.GetLayerDefn())
+    target_feature.SetGeometry(base_geom)
+    target_layer.CreateFeature(target_feature)
+    target_layer.SyncToDisk()
+    target_feature = None
+    target_layer = None
+    target_vector = None
+
+
+def get_utm_epsg_srs(vector_path, fid):
+    """Calculate the EPSG SRS of the watershed at the given feature.
+
+    Parameters:
+        vector_path (str): path to a vector in a wgs84 projection.
+        fid (int): valid feature id in vector that will be used to
+            calculate the UTM EPSG code.
+
+    Returns:
+        EPSG code of the centroid of the feature indicated by `fid`.
+
+    """
+    vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
+    layer = vector.GetLayer()
+    feature = layer.GetFeature(fid)
+    geometry = feature.GetGeometryRef()
+    centroid_geom = geometry.Centroid()
+    utm_code = (numpy.floor((centroid_geom.GetX() + 180)/6) % 60) + 1
+    lat_code = 6 if centroid_geom.GetY() > 0 else 7
+    epsg_code = int('32%d%02d' % (lat_code, utm_code))
+    epsg_srs = osr.SpatialReference()
+    epsg_srs.ImportFromEPSG(epsg_code)
+    geometry = None
+    layer = None
+    vector = None
+    return epsg_srs
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Watershed Worker.')
-    parser.add_argument(
-        'n_workers', type=int, default=-1,
-        help='number of taskgraph workers to create')
     parser.add_argument(
         'app_port', type=int, default=8888,
         help='port to listen on for posts')
     args = parser.parse_args()
-    main(args.n_workers)
-    for _ in range(args.n_workers):
-        ndr_worker_thread = threading.Thread(
-            target=ndr_worker, args=(WORK_QUEUE,))
-        ndr_worker_thread.start()
+    main()
+    ndr_worker_thread = threading.Thread(
+        target=ndr_worker, args=(WORK_QUEUE,))
+    ndr_worker_thread.start()
     APP.run(host='0.0.0.0', port=args.app_port)
