@@ -242,9 +242,9 @@ def processing_complete():
     """
     payload = flask.request.get_json()
     watershed_basename = payload['watershed_basename']
-    watershed_fid = payload['watershed_fid']
+    fid = payload['fid']
     workspace_url = payload['workspace_url']
-    LOGGER.debug('updating %s:%d complete', watershed_basename, watershed_fid)
+    LOGGER.debug('updating %s:%d complete', watershed_basename, fid)
     # TODO -- re-register the worker/port
     connection = None
     cursor = None
