@@ -356,6 +356,7 @@ def host_file_monitor(host_file_path, worker_host_queue):
         try:
             current_modified_time = os.path.getmtime(host_file_path)
             if current_modified_time != last_modified_time:
+                LOGGER.debug('checking change in hostfile')
                 last_modified_time = current_modified_time
                 with open(host_file_path, 'r') as ip_file:
                     ip_file_contents = ip_file.readlines()
@@ -366,6 +367,7 @@ def host_file_monitor(host_file_path, worker_host_queue):
                         line.strip() for line in ip_file_contents
                         if line.startswith('http')])
                     new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
+                    LOGGER.debug('here are the new hosts: %s', new_hosts)
                     for new_host in new_hosts:
                         worker_host_queue.put(new_host)
             time.sleep(DETECTOR_POLL_TIME)
