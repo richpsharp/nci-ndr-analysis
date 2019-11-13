@@ -273,7 +273,7 @@ def schedule_worker(worker_queue):
     """
     try:
         LOGGER.debug('launching schedule_worker')
-        ro_uri = 'file://%s?mode=ro' % STATUS_DATABASE_PATH
+        ro_uri = 'file://./%s?mode=ro' % STATUS_DATABASE_PATH
         LOGGER.debug('opening %s', ro_uri)
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
