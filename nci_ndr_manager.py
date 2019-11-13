@@ -269,7 +269,7 @@ def processing_complete():
             if cursor:
                 cursor.close()
     LOGGER.debug('%s:%d complete', watershed_basename, fid)
-    return '%s:%d complete', % (watershed_basename, fid), 202
+    return '%s:%d complete' % (watershed_basename, fid), 202
 
 
 @retrying.retry()
