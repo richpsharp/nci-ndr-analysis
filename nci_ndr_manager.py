@@ -231,7 +231,7 @@ def create_status_database(
 
 
 @APP.route('/api/v1/processing_complete', methods=['POST'])
-def processing_complete(watershed_basename, fid, worker_ip_port):
+def processing_complete():
     """Invoked when processing is complete for given watershed.
 
     Body of the post includs a url to the stored .zip file of the archive.
@@ -240,13 +240,12 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
         None.
 
     """
-    watershed_basename = flask.request.args.get('watershed_basename', None)
-    fid = flask.request.args.get('fid', None)
-    worker_ip_port = flask.request.args.get('worker_ip_port', None)
-    LOGGER.debug('updating %s:%d complete', watershed_basename, fid)
     payload = flask.request.get_json()
+    watershed_basename = payload['watershed_basename']
+    watershed_fid = payload['watershed_fid']
     workspace_url = payload['workspace_url']
-    WORKER_QUEUE.put(worker_ip_port)
+    LOGGER.debug('updating %s:%d complete', watershed_basename, watershed_fid)
+    # TODO -- re-register the worker/port
     connection = None
     cursor = None
     while True:
@@ -305,9 +304,7 @@ def schedule_worker(external_ip, worker_queue):
             worker_ip_port = worker_queue.get()
             with APP.app_context():
                 callback_url = flask.url_for(
-                    'processing_complete', _external=True,
-                    watershed_basename=watershed_basename, fid=fid,
-                    worker_ip_port=worker_ip_port)
+                    'processing_complete', _external=True)
 
             data_payload = {
                 'watershed_basename': watershed_basename,

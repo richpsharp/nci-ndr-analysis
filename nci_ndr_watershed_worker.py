@@ -234,7 +234,9 @@ def ndr_worker(work_queue):
                 local_watershed_path)
 
             data_payload = {
-                'workspace_url': 'TEST_URL'
+                'workspace_url': 'TEST_URL',
+                'watershed_basename': watershed_basename,
+                'fid': watershed_fid,
             }
             LOGGER.debug('abount to callback to this url: %s', callback_url)
             response = requests.post(callback_url, json=data_payload)
