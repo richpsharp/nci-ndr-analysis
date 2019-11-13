@@ -52,7 +52,7 @@ SCHEDULED_SET = set()
 APP = flask.Flask(__name__)
 
 
-def main():
+def main(external_ip):
     """Entry point."""
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
         try:
@@ -111,7 +111,7 @@ def main():
 
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
-        args=(WORKER_QUEUE,))
+        args=(external_ip, WORKER_QUEUE,))
     schedule_worker_thread.start()
 
 
@@ -265,10 +265,16 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
 
 
 @retrying.retry()
-def schedule_worker(worker_queue):
+def schedule_worker(external_ip, worker_queue):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
+        external_ip (str): IP address used as a base to define build urls.
+        worker_queue (queue): queue ip/port strings that can be used to connect
+            to workers via RESTful API.
+
+    Returns:
+        None.
 
     """
     try:
@@ -289,7 +295,7 @@ def schedule_worker(worker_queue):
                 LOGGER.warning(
                     '%s already in schedule', (watershed_basename, fid))
             worker_ip_port = worker_queue.get()
-            callback_url = APP.url_for(
+            callback_url = flask.url_for(
                 'processing_complete', _external=True,
                 watershed_basename=watershed_basename, fid=fid,
                 worker_ip_port=worker_ip_port)
@@ -327,11 +333,14 @@ def schedule_worker(worker_queue):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
-        'app_port', type=int, default=8080,
+        '--app_port', type=int, default=8080,
         help='port to listen on for callback complete')
-
+    parser.add_argument(
+        '--external_ip', type=str, default='localhost',
+        help='define external IP that can be used to connect to this app')
     args = parser.parse_args()
     # TODO: this localhost:8888 is a test server
     WORKER_QUEUE.put('localhost:8888')
-    main()
+    main(args.external_ip)
+    APP['SERVER_NAME'] = '%s:%d' % (args.external_ip, args.app_port)
     APP.run(host='0.0.0.0', port=args.app_port)
