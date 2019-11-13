@@ -240,6 +240,9 @@ def processing_complete(watershed_basename, fid, worker_ip_port):
         None.
 
     """
+    watershed_basename = flask.request.args.get('watershed_basename', None)
+    fid = flask.request.args.get('fid', None)
+    worker_ip_port = flask.request.args.get('worker_ip_port', None)
     LOGGER.debug('updating %s:%d complete', watershed_basename, fid)
     payload = flask.request.get_json()
     workspace_url = payload['workspace_url']
