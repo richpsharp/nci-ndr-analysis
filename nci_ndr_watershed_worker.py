@@ -236,7 +236,8 @@ def ndr_worker(work_queue):
         data_payload = {
             'workspace_url': 'TEST_URL'
         }
-        response = requests.post(callback_url, data=data_payload)
+        LOGGER.debug('abount to callback to this url: %s', callback_url)
+        response = requests.post(callback_url, json=data_payload)
         if not response.ok:
             LOGGER.error(
                 'something bad happened when scheduling worker: %s',
