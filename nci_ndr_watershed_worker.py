@@ -74,7 +74,7 @@ JOB_STATUS = {}
 APP = flask.Flask(__name__)
 
 
-def main(n_workers):
+def main():
     """Entry point."""
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
         try:
@@ -82,7 +82,7 @@ def main(n_workers):
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, n_workers)
+    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, 0)
 
     # used to create dynamic paths
     path_map = {}
@@ -266,7 +266,8 @@ def ndr_worker(work_queue):
         #     'results_suffix': '',
         #     'threshold_flow_accumulation': (
         #         GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
-        #     'n_workers': -1
+        #     'n_workers': -1,
+        #     'target_sr_wkt': target_sr_wkt
         # }
 
 
