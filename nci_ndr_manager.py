@@ -39,7 +39,7 @@ COUNTRY_BORDERS_URL = (
 WORKSPACE_DIR = 'workspace_manager'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
-STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.db')
+STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
 logging.basicConfig(
     level=logging.DEBUG,
     format=(
