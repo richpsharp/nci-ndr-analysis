@@ -230,7 +230,8 @@ def ndr_worker(work_queue):
                 local_workspace, '%s.gpkg' % ws_prefix)
 
             reproject_geometry_to_target(
-                watershed_fid, epsg_srs.ExportToWkt(), local_watershed_path)
+                watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
+                local_watershed_path)
 
             data_payload = {
                 'workspace_url': 'TEST_URL'
