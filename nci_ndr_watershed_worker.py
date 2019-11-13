@@ -172,6 +172,7 @@ def run_ndr():
             (watershed_path, fid, bucket_id, callback_url, session_id))
         return {'status_url': status_url}, 201
     except Exception as e:
+        LOGGER.exception('an execption occured')
         return str(e), 500
 
 
