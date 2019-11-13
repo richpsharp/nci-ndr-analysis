@@ -342,7 +342,7 @@ if __name__ == '__main__':
     # TODO: this localhost:8888 is a test server
     WORKER_QUEUE.put('localhost:8888')
     main(args.external_ip)
+    APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
-        port=args.app_port,
-        SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
+        port=args.app_port)
