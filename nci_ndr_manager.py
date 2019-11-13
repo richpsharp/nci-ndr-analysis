@@ -271,11 +271,11 @@ def schedule_worker(worker_queue):
     Parameters:
 
     """
-    LOGGER.debug('launching schedule_worker')
-    connection = sqlite3.connect(
-        'file://%s?mode=ro' % STATUS_DATABASE_PATH, uri=True)
-    cursor = connection.cursor()
     try:
+        LOGGER.debug('launching schedule_worker')
+        connection = sqlite3.connect(
+            'file://%s?mode=ro' % STATUS_DATABASE_PATH, uri=True)
+        cursor = connection.cursor()
         LOGGER.debug('querying prescheduled')
         cursor.execute(
             'SELECT watershed_basename, fid '
