@@ -364,8 +364,7 @@ def host_file_monitor(host_file_path, worker_host_queue):
                     global GLOBAL_HOST_SET
                     old_host_set = GLOBAL_HOST_SET
                     GLOBAL_HOST_SET = set([
-                        line.strip() for line in ip_file_contents
-                        if line.startswith('http')])
+                        line.strip() for line in ip_file_contents])
                     new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
                     LOGGER.debug('here are the new hosts: %s', new_hosts)
                     for new_host in new_hosts:
