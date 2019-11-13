@@ -48,7 +48,12 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 WORKER_QUEUE = queue.Queue()
+HOST_FILE_PATH = 'host_file.txt'
+DETECTOR_POLL_TIME = 5.0
 SCHEDULED_SET = set()
+GLOBAL_LOCK = threading.Lock()
+GLOBAL_HOST_SET = set()
+
 APP = flask.Flask(__name__)
 
 
@@ -331,6 +336,43 @@ def schedule_worker(external_ip, worker_queue):
         raise
 
 
+def host_file_monitor(host_file_path, worker_host_queue):
+    """Watch host_file_path & update worker_host_queue.
+
+    Parameters:
+        host_file_path (str): path to a file that contains lines
+            of http://[host]:[port]<?label> that can be used to send inference
+            work to. <label> can be used to use the same machine more than
+            once.
+        worker_host_queue (queue.Queue): new hosts are queued here
+            so they can be pulled by other workers later.
+
+    Returns:
+        never
+
+    """
+    last_modified_time = 0
+    while True:
+        try:
+            current_modified_time = os.path.getmtime(host_file_path)
+            if current_modified_time != last_modified_time:
+                last_modified_time = current_modified_time
+                with open(host_file_path, 'r') as ip_file:
+                    ip_file_contents = ip_file.readlines()
+                with GLOBAL_LOCK:
+                    global GLOBAL_HOST_SET
+                    old_host_set = GLOBAL_HOST_SET
+                    GLOBAL_HOST_SET = set([
+                        line.strip() for line in ip_file_contents
+                        if line.startswith('http')])
+                    new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
+                    for new_host in new_hosts:
+                        worker_host_queue.put(new_host)
+            time.sleep(DETECTOR_POLL_TIME)
+        except Exception:
+            LOGGER.exception('exception in `host_file_monitor`')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
@@ -340,9 +382,15 @@ if __name__ == '__main__':
         '--external_ip', type=str, default='localhost',
         help='define external IP that can be used to connect to this app')
     args = parser.parse_args()
-    # TODO: this localhost:8888 is a test server
-    WORKER_QUEUE.put('localhost:8888')
     main(args.external_ip)
+    if not os.path.exists(HOST_FILE_PATH):
+        with open(HOST_FILE_PATH, 'w') as host_file:
+            host_file.write('')
+    host_file_monitor_thread = threading.Thread(
+        target=host_file_monitor,
+        args=(HOST_FILE_PATH, WORKER_QUEUE))
+    host_file_monitor_thread.start()
+
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
