@@ -102,6 +102,7 @@ def main():
             STATUS_DATABASE_PATH, watersheds_unzip_dir, country_borders_path,
             database_complete_token_path),
         target_path_list=[database_complete_token_path],
+        ignore_path_list=[STATUS_DATABASE_PATH],
         dependent_task_list=[country_fetch_task, unzip_watersheds_task],
         task_name='create status database')
 
@@ -195,11 +196,14 @@ def create_status_database(
             fid = watershed_feature.GetFID()
             watershed_geom = shapely.wkb.loads(
                 watershed_feature.GetGeometryRef().ExportToWkb())
-            name_list = []
+            country_name_list = []
             for intersect_geom in str_tree.query(watershed_geom):
                 if intersect_geom.prep_geom.intersects(watershed_geom):
-                    name_list.append(intersect_geom.country_name)
-            country_names = ','.join(name_list)
+                    country_name_list.append(intersect_geom.country_name)
+            if not country_name_list:
+                # watershed is not in any country, so lets not run it
+                continue
+            country_names = ','.join(country_name_list)
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
                  country_names, None))
