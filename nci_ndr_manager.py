@@ -317,7 +317,7 @@ def schedule_worker(external_ip, worker_queue):
             worker_rest_url = (
                 'http://%s/api/v1/run_ndr' % worker_ip_port)
             LOGGER.debug('sending job %s to %s', data_payload, worker_rest_url)
-            response = requests.post(worker_rest_url, data=data_payload)
+            response = requests.post(worker_rest_url, json=data_payload)
             if response.ok:
                 SCHEDULED_SET.add((watershed_basename, fid))
             else:
