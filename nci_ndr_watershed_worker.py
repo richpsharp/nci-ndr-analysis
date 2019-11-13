@@ -202,72 +202,75 @@ def ndr_worker(work_queue):
 
     """
     while True:
-        payload = work_queue.get()
-        LOGGER.debug(
-            'would run right now if implemented %s', payload)
-        (watershed_basename, watershed_fid, bucket_id,
-         callback_url, session_id) = payload
-
-        # create local workspace
-        ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
-        local_workspace = os.path.join(
-            WORKSPACE_DIR, ws_prefix)
         try:
-            os.makedirs(local_workspace)
-        except OSError:
-            LOGGER.exception('unable to create %s', local_workspace)
+            payload = work_queue.get()
+            LOGGER.debug(
+                'would run right now if implemented %s', payload)
+            (watershed_basename, watershed_fid, bucket_id,
+             callback_url, session_id) = payload
 
-        # extract the watershed to workspace/data
-        watershed_root_path = os.path.join(
-            CHURN_DIR,
-            'watersheds_globe_HydroSHEDS_15arcseconds_'
-            'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
-            'watersheds_globe_HydroSHEDS_15arcseconds',
-            '%s.shp' % watershed_basename)
-        epsg_srs = get_utm_epsg_srs(watershed_root_path, watershed_fid)
-        local_watershed_path = os.path.join(
-            local_workspace, '%s.gpkg' % ws_prefix)
+            # create local workspace
+            ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
+            local_workspace = os.path.join(
+                WORKSPACE_DIR, ws_prefix)
+            try:
+                os.makedirs(local_workspace)
+            except OSError:
+                LOGGER.exception('unable to create %s', local_workspace)
 
-        reproject_geometry_to_target(
-            watershed_fid, epsg_srs.ExportToWkt(), local_watershed_path)
+            # extract the watershed to workspace/data
+            watershed_root_path = os.path.join(
+                CHURN_DIR,
+                'watersheds_globe_HydroSHEDS_15arcseconds_'
+                'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
+                'watersheds_globe_HydroSHEDS_15arcseconds',
+                '%s.shp' % watershed_basename)
+            epsg_srs = get_utm_epsg_srs(watershed_root_path, watershed_fid)
+            local_watershed_path = os.path.join(
+                local_workspace, '%s.gpkg' % ws_prefix)
 
-        data_payload = {
-            'workspace_url': 'TEST_URL'
-        }
-        LOGGER.debug('abount to callback to this url: %s', callback_url)
-        response = requests.post(callback_url, json=data_payload)
-        if not response.ok:
-            LOGGER.error(
-                'something bad happened when scheduling worker: %s',
-                str(response))
+            reproject_geometry_to_target(
+                watershed_fid, epsg_srs.ExportToWkt(), local_watershed_path)
 
-        # clip/extract/project the DEM, precip, lulc, fert. to local workspace
-        # construct the args dict
-        # call NDR
-        # zip up the workspace
-        # copy workspace to bucket
-        # delete original workspace
-        # update global status
-        # post to callback url
-        # terminate
-        # ('dem', 'watersheds', 'precip', 'lulc', 'fertilizer',
-        #          'biophysical_table'),
+            data_payload = {
+                'workspace_url': 'TEST_URL'
+            }
+            LOGGER.debug('abount to callback to this url: %s', callback_url)
+            response = requests.post(callback_url, json=data_payload)
+            if not response.ok:
+                LOGGER.error(
+                    'something bad happened when scheduling worker: %s',
+                    str(response))
 
-        # args = {
-        #     'workspace_dir':
-        #     'dem_path':
-        #     'lulc_path':
-        #     'runoff_proxy_path':
-        #     'watersheds_path':
-        #     'biophysical_table_path': path_map['biophysical_path']
-        #     'calc_p': False,
-        #     'calc_n': GLOBAL_NDR_ARGS['calc_n'].
-        #     'results_suffix': '',
-        #     'threshold_flow_accumulation': (
-        #         GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
-        #     'n_workers': -1,
-        #     'target_sr_wkt': target_sr_wkt
-        # }
+            # clip/extract/project the DEM, precip, lulc, fert. to local workspace
+            # construct the args dict
+            # call NDR
+            # zip up the workspace
+            # copy workspace to bucket
+            # delete original workspace
+            # update global status
+            # post to callback url
+            # terminate
+            # ('dem', 'watersheds', 'precip', 'lulc', 'fertilizer',
+            #          'biophysical_table'),
+
+            # args = {
+            #     'workspace_dir':
+            #     'dem_path':
+            #     'lulc_path':
+            #     'runoff_proxy_path':
+            #     'watersheds_path':
+            #     'biophysical_table_path': path_map['biophysical_path']
+            #     'calc_p': False,
+            #     'calc_n': GLOBAL_NDR_ARGS['calc_n'].
+            #     'results_suffix': '',
+            #     'threshold_flow_accumulation': (
+            #         GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
+            #     'n_workers': -1,
+            #     'target_sr_wkt': target_sr_wkt
+            # }
+        except Exception:
+            LOGGER.exception('something bad happened')
 
 
 def reproject_geometry_to_target(
