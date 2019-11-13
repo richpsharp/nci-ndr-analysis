@@ -295,10 +295,11 @@ def schedule_worker(external_ip, worker_queue):
                 LOGGER.warning(
                     '%s already in schedule', (watershed_basename, fid))
             worker_ip_port = worker_queue.get()
-            callback_url = flask.url_for(
-                'processing_complete', _external=True,
-                watershed_basename=watershed_basename, fid=fid,
-                worker_ip_port=worker_ip_port)
+            with APP.app_context():
+                callback_url = flask.url_for(
+                    'processing_complete', _external=True,
+                    watershed_basename=watershed_basename, fid=fid,
+                    worker_ip_port=worker_ip_port)
 
             data_payload = {
                 'watershed_basename': watershed_basename,
