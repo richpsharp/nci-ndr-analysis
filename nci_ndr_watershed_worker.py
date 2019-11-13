@@ -161,7 +161,7 @@ def run_ndr():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('got post: %s', str(payload))
-        watershed_path = payload['watershed_path']
+        watershed_basename = payload['watershed_basename']
         fid = payload['fid']
         bucket_id = payload['bucket_id']
         callback_url = payload['callback_url']
@@ -169,7 +169,7 @@ def run_ndr():
         status_url = flask.url_for(
             'get_status', _external=True, session_id=session_id)
         WORK_QUEUE.put(
-            (watershed_path, fid, bucket_id, callback_url, session_id))
+            (watershed_basename, fid, bucket_id, callback_url, session_id))
         return {'status_url': status_url}, 201
     except Exception as e:
         LOGGER.exception('an execption occured')
@@ -194,12 +194,9 @@ def ndr_worker(work_queue):
     when the module started.
 
     Paramters:
-        watershed_path (str): relative path to watershed vector.
-        fid (int): feature ID for the watershed.
-        bucket_id (str): Google Bucket ID to copy completed workspace to.
-        job_id (str): unique string that can be used to update status of
-            `ACTIVE_JOBS`.
-
+        work_queue (queue): gets tuples of
+            (watershed_basename, watershed_fid, bucket_id, callback_url,
+             session_id)
     Returns:
         None.
 
