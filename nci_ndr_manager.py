@@ -280,6 +280,7 @@ def schedule_worker(worker_queue):
         LOGGER.debug('querying prescheduled')
         cursor.execute(
             'SELECT watershed_basename, fid '
+            'FROM job_status '
             'WHERE job_status=\'PRESCHEDULED\'')
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
