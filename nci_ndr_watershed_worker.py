@@ -7,6 +7,7 @@ a RESTful API.
 """
 import argparse
 import datetime
+import glob
 import logging
 import os
 import queue
@@ -231,13 +232,41 @@ def ndr_worker(work_queue):
             local_watershed_path = os.path.join(
                 local_workspace, '%s.gpkg' % ws_prefix)
 
+            # the dem is in lat/lng and is also a big set of tiles. Make a VRT
+            # which is the bounds of the lat/lng of the watershed and use that
+            # as the dem path argument
+            watershed_vector = gdal.OpenEx(watershed_root_path, gdal.OF_VECTOR)
+            watershed_layer = watershed_vector.GetLayer()
+            watershed_feature = watershed_layer.GetFeature(watershed_fid)
+            watershed_geom = watershed_feature.GetGeometryRef()
+            x1, x2, y1, y2 = watershed_geom.GetEnvelope()
+            watershed_geom = None
+            watershed_feature = None
+            watershed_layer = None
+            watershed_vector = None
+
+            vrt_options = gdal.BuildVRTOptions(
+                outputBounds=(
+                    min(x1, x2),
+                    min(y1, y2),
+                    max(x1, x2),
+                    max(y1, y2))
+            )
+            dem_tile_path = os.path.dirname(PATH_MAP['dem_path'])
+            dem_vrt_path = os.path.join(
+                dem_tile_path, '%s_%s_vrt.vrt' % (
+                    watershed_basename, watershed_fid))
+            gdal.BuildVRT(
+                dem_vrt_path, glob.glob(dem_tile_path, '*.tif'),
+                options=vrt_options)
+
             reproject_geometry_to_target(
                 watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
                 local_watershed_path)
 
             args = {
                 'workspace_dir': local_workspace,
-                'dem_path': PATH_MAP['dem_path'],
+                'dem_path': dem_vrt_path,
                 'lulc_path': PATH_MAP['lulc_path'],
                 'runoff_proxy_path': PATH_MAP['precip_path'],
                 'ag_load_path': PATH_MAP['fertilizer_path'],
@@ -253,6 +282,7 @@ def ndr_worker(work_queue):
             }
             try:
                 inspring.ndr.ndr.execute(args)
+                os.remove(dem_vrt_path)
                 data_payload = {
                     'workspace_url': 'TEST_URL',
                     'watershed_basename': watershed_basename,
