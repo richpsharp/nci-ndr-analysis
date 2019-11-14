@@ -26,9 +26,8 @@ RUN /bin/bash -c "source ~/.bashrc; \
     git+git://github.com/natcap/ecoshard.git@3b92d5925e8502f7536f1d51ba6fc404687c2926; \
     conda clean -a -y"
 RUN /bin/bash -c "source ~/.bashrc; \
-    git clone git@github.com:richpsharp/InSPRING.git; \
-    pushd InSPRING;
-    python setup.py install"
+    pip install --no-dependencies --ignore-installed --no-cache-dir git@github.com:richpsharp/InSPRING.git@90051798f27604154d3efe0f0bca34b6ad53424e; \
+    conda clean -a -y"
 
 WORKDIR /var/workspace
 ENTRYPOINT ["/bin/bash", "-i", "execute.sh"]
