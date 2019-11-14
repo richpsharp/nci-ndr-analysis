@@ -240,6 +240,7 @@ def ndr_worker(work_queue):
                 'dem_path': PATH_MAP['dem_path'],
                 'lulc_path': PATH_MAP['lulc_path'],
                 'runoff_proxy_path': PATH_MAP['precip_path'],
+                'ag_load_path': PATH_MAP['fertilizer_path'],
                 'watersheds_path': local_watershed_path,
                 'biophysical_table_path': PATH_MAP['biophysical_path'],
                 'calc_p': False,
