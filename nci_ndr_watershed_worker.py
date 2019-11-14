@@ -257,7 +257,7 @@ def ndr_worker(work_queue):
                 dem_tile_path, '%s_%s_vrt.vrt' % (
                     watershed_basename, watershed_fid))
             gdal.BuildVRT(
-                dem_vrt_path, glob.glob(dem_tile_path, '*.tif'),
+                dem_vrt_path, glob.glob(os.path.join(dem_tile_path, '*.tif')),
                 options=vrt_options)
 
             reproject_geometry_to_target(
