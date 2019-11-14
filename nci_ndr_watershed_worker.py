@@ -23,6 +23,7 @@ import ecoshard
 import flask
 import inspring.ndr.ndr
 import numpy
+import pygeoprocessing
 import requests
 import retrying
 import taskgraph
@@ -205,6 +206,8 @@ def ndr_worker(work_queue):
         None.
 
     """
+    wgs84_sr = osr.SpatialReference()
+    wgs84_sr.ImportFromEPSG(4326)
     while True:
         try:
             payload = work_queue.get()
@@ -245,6 +248,12 @@ def ndr_worker(work_queue):
             watershed_layer = None
             watershed_vector = None
 
+            watershed_bounding_box = [
+                min(x1, x2),
+                min(y1, y2),
+                max(x1, x2),
+                max(y1, y2)]
+
             vrt_options = gdal.BuildVRTOptions(
                 outputBounds=(
                     min(x1, x2)-0.1,
@@ -260,30 +269,9 @@ def ndr_worker(work_queue):
                 dem_vrt_path, glob.glob(os.path.join(dem_dir_path, '*.tif')),
                 options=vrt_options)
 
-            # lulc
-            lulc_dir_path = os.path.dirname(PATH_MAP['lulc_path'])
-            lulc_vrt_path = os.path.join(
-                lulc_dir_path, '%s_%s_lulc_vrt.vrt' % (
-                    watershed_basename, watershed_fid))
-            gdal.BuildVRT(
-                lulc_vrt_path, glob.glob(os.path.join(lulc_dir_path, '*.tif')),
-                options=vrt_options)
-            # precip
-            precip_dir_path = os.path.dirname(PATH_MAP['precip_path'])
-            precip_vrt_path = os.path.join(
-                precip_dir_path, '%s_%s_precip_vrt.vrt' % (
-                    watershed_basename, watershed_fid))
-            gdal.BuildVRT(
-                precip_vrt_path, glob.glob(os.path.join(precip_dir_path, '*.tif')),
-                options=vrt_options)
-            # fertilizer
-            fertilizer_dir_path = os.path.dirname(PATH_MAP['fertilizer_path'])
-            fertilizer_vrt_path = os.path.join(
-                fertilizer_dir_path, '%s_%s_fertilizer_vrt.vrt' % (
-                    watershed_basename, watershed_fid))
-            gdal.BuildVRT(fertilizer_vrt_path, glob.glob(
-                os.path.join(fertilizer_dir_path, '*.tif')),
-                options=vrt_options)
+            target_bounding_box = pygeoprocessing.transform_bounding_box(
+                watershed_bounding_box, wgs84_sr.ExportToWkt(),
+                epsg_srs.ExportToWkt())
 
             reproject_geometry_to_target(
                 watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
@@ -292,13 +280,11 @@ def ndr_worker(work_queue):
             args = {
                 'workspace_dir': local_workspace,
                 'dem_path': dem_vrt_path,
-                'lulc_path': lulc_vrt_path,
-                'runoff_proxy_path': precip_vrt_path,
-                'ag_load_path': fertilizer_vrt_path,
+                'lulc_path': PATH_MAP['lulc_path'],
+                'runoff_proxy_path': PATH_MAP['precip_path'],
+                'ag_load_path': PATH_MAP['fertilizer_path'],
                 'watersheds_path': local_watershed_path,
                 'biophysical_table_path': PATH_MAP['biophysical_table_path'],
-                'calc_p': False,
-                'calc_n': True,
                 'results_suffix': '',
                 'threshold_flow_accumulation': (
                     GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
@@ -306,6 +292,7 @@ def ndr_worker(work_queue):
                 'n_workers': -1,
                 'target_sr_wkt': epsg_srs.ExportToWkt(),
                 'target_pixel_size': TARGET_PIXEL_SIZE,
+                'target_bounding_box': target_bounding_box
             }
             try:
                 inspring.ndr.ndr.execute(args)
