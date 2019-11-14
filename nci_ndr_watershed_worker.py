@@ -55,7 +55,6 @@ BIOPHYSICAL_URL = (
 GLOBAL_NDR_ARGS = {
     'threshold_flow_accumulation': 1000,
     'k_param': 2.0,
-    'calc_n': True,
 }
 
 WORKSPACE_DIR = 'workspace_worker'
@@ -273,10 +272,11 @@ def ndr_worker(work_queue):
                 'watersheds_path': local_watershed_path,
                 'biophysical_table_path': PATH_MAP['biophysical_table_path'],
                 'calc_p': False,
-                'calc_n': GLOBAL_NDR_ARGS['calc_n'],
+                'calc_n': True,
                 'results_suffix': '',
                 'threshold_flow_accumulation': (
                     GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
+                'k_param': GLOBAL_NDR_ARGS['k_param'],
                 'n_workers': 0,
                 'target_sr_wkt': epsg_srs.ExportToWkt()
             }
