@@ -242,7 +242,7 @@ def ndr_worker(work_queue):
                 'runoff_proxy_path': PATH_MAP['precip_path'],
                 'ag_load_path': PATH_MAP['fertilizer_path'],
                 'watersheds_path': local_watershed_path,
-                'biophysical_table_path': PATH_MAP['biophysical_path'],
+                'biophysical_table_path': PATH_MAP['biophysical_table_path'],
                 'calc_p': False,
                 'calc_n': GLOBAL_NDR_ARGS['calc_n'],
                 'results_suffix': '',
