@@ -260,6 +260,31 @@ def ndr_worker(work_queue):
                 dem_vrt_path, glob.glob(os.path.join(dem_dir_path, '*.tif')),
                 options=vrt_options)
 
+            # lulc
+            lulc_dir_path = os.path.dirname(PATH_MAP['lulc_path'])
+            lulc_vrt_path = os.path.join(
+                lulc_dir_path, '%s_%s_lulc_vrt.vrt' % (
+                    watershed_basename, watershed_fid))
+            gdal.BuildVRT(
+                lulc_vrt_path, glob.glob(os.path.join(lulc_dir_path, '*.tif')),
+                options=vrt_options)
+            # precip
+            precip_dir_path = os.path.dirname(PATH_MAP['precip_path'])
+            precip_vrt_path = os.path.join(
+                precip_dir_path, '%s_%s_precip_vrt.vrt' % (
+                    watershed_basename, watershed_fid))
+            gdal.BuildVRT(
+                precip_vrt_path, glob.glob(os.path.join(precip_dir_path, '*.tif')),
+                options=vrt_options)
+            # fertilizer
+            fertilizer_dir_path = os.path.dirname(PATH_MAP['fertilizer_path'])
+            fertilizer_vrt_path = os.path.join(
+                fertilizer_dir_path, '%s_%s_fertilizer_vrt.vrt' % (
+                    watershed_basename, watershed_fid))
+            gdal.BuildVRT(fertilizer_vrt_path, glob.glob(
+                os.path.join(fertilizer_dir_path, '*.tif')),
+                options=vrt_options)
+
             reproject_geometry_to_target(
                 watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
                 local_watershed_path)
@@ -267,9 +292,9 @@ def ndr_worker(work_queue):
             args = {
                 'workspace_dir': local_workspace,
                 'dem_path': dem_vrt_path,
-                'lulc_path': PATH_MAP['lulc_path'],
-                'runoff_proxy_path': PATH_MAP['precip_path'],
-                'ag_load_path': PATH_MAP['fertilizer_path'],
+                'lulc_path': lulc_vrt_path,
+                'runoff_proxy_path': precip_vrt_path,
+                'ag_load_path': fertilizer_vrt_path,
                 'watersheds_path': local_watershed_path,
                 'biophysical_table_path': PATH_MAP['biophysical_table_path'],
                 'calc_p': False,
@@ -284,7 +309,9 @@ def ndr_worker(work_queue):
             }
             try:
                 inspring.ndr.ndr.execute(args)
-                os.remove(dem_vrt_path)
+                for vrt_path in [dem_vrt_path, lulc_vrt_path, precip_vrt_path,
+                                 fertilizer_vrt_path]:
+                    os.remove(vrt_path)
                 data_payload = {
                     'workspace_url': 'TEST_URL',
                     'watershed_basename': watershed_basename,
