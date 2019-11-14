@@ -27,28 +27,28 @@ import retrying
 import taskgraph
 
 DEM_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'global_dem_3s_blake2b_0532bf0a1bedbe5a98d1dc449a33ef0c.zip')
 
 WATERSHEDS_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'watersheds_globe_HydroSHEDS_15arcseconds_'
     'blake2b_14ac9c77d2076d51b0258fd94d9378d4.zip')
 
 PRECIP_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'worldclim_2015_md5_16356b3770460a390de7e761a27dbfa1.tif')
 
 LULC_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'lulc_gc_esa_classes_md5_15b6d376e67f9e26a7188727278e630e.tif')
 
 FERTILIZER_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'nfertilizer_global_kg_ha_yr_md5_88dae2a76a120dedeab153a334f929cc.tif')
 
 BIOPHYSICAL_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'NDR_representative_table_md5_958bdeb45eb93e54d924ccd16b6cafee.csv')
 
 GLOBAL_NDR_ARGS = {

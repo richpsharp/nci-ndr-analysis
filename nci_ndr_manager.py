@@ -28,12 +28,12 @@ import shapely.wkb
 import taskgraph
 
 WATERSHEDS_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'watersheds_globe_HydroSHEDS_15arcseconds_'
     'blake2b_14ac9c77d2076d51b0258fd94d9378d4.zip')
 
 COUNTRY_BORDERS_URL = (
-    'https://storage.googleapis.com/nci-ecoshards/'
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'world_borders_md5_c8dd971a8a853b2f3e1d3801b9747d5f.gpkg')
 
 WORKSPACE_DIR = 'workspace_manager'
