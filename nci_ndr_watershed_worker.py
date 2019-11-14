@@ -285,6 +285,8 @@ def ndr_worker(work_queue):
                 'ag_load_path': PATH_MAP['fertilizer_path'],
                 'watersheds_path': local_watershed_path,
                 'biophysical_table_path': PATH_MAP['biophysical_table_path'],
+                'calc_n': True,
+                'calc_p': False,
                 'results_suffix': '',
                 'threshold_flow_accumulation': (
                     GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
