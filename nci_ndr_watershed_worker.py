@@ -177,7 +177,8 @@ def run_ndr():
         LOGGER.exception('an execption occured')
         return str(e), 500
 
-@APP.route('/api/v1/get_status<session_id>', methods=['GET'])
+
+@APP.route('/api/v1/get_status/<session_id>', methods=['GET'])
 def get_status(session_id):
     """Report the status of the execution state of `session_id`."""
     try:
