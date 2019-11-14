@@ -74,6 +74,7 @@ WORK_QUEUE = queue.Queue()
 JOB_STATUS = {}
 APP = flask.Flask(__name__)
 PATH_MAP = {}
+TARGET_PIXEL_SIZE = (90, -90)
 
 
 def main():
@@ -246,10 +247,10 @@ def ndr_worker(work_queue):
 
             vrt_options = gdal.BuildVRTOptions(
                 outputBounds=(
-                    min(x1, x2),
-                    min(y1, y2),
-                    max(x1, x2),
-                    max(y1, y2))
+                    min(x1, x2)-0.1,
+                    min(y1, y2)-0.1,
+                    max(x1, x2)+0.1,
+                    max(y1, y2)+0.1)
             )
             dem_dir_path = os.path.join(PATH_MAP['dem_path'], 'global_dem_3s')
             dem_vrt_path = os.path.join(
@@ -277,8 +278,9 @@ def ndr_worker(work_queue):
                 'threshold_flow_accumulation': (
                     GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
                 'k_param': GLOBAL_NDR_ARGS['k_param'],
-                'n_workers': 0,
-                'target_sr_wkt': epsg_srs.ExportToWkt()
+                'n_workers': -1,
+                'target_sr_wkt': epsg_srs.ExportToWkt(),
+                'target_pixel_size': TARGET_PIXEL_SIZE,
             }
             try:
                 inspring.ndr.ndr.execute(args)
