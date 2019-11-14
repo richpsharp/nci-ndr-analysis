@@ -252,12 +252,12 @@ def ndr_worker(work_queue):
                     max(x1, x2),
                     max(y1, y2))
             )
-            dem_tile_path = os.path.dirname(PATH_MAP['dem_path'])
             dem_vrt_path = os.path.join(
-                dem_tile_path, '%s_%s_vrt.vrt' % (
+                PATH_MAP['dem_path'], '%s_%s_vrt.vrt' % (
                     watershed_basename, watershed_fid))
             gdal.BuildVRT(
-                dem_vrt_path, glob.glob(os.path.join(dem_tile_path, '*.tif')),
+                dem_vrt_path, glob.glob(os.path.join(
+                    PATH_MAP['dem_path'], '*.tif')),
                 options=vrt_options)
 
             reproject_geometry_to_target(
