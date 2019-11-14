@@ -20,6 +20,7 @@ from osgeo import ogr
 from osgeo import osr
 import ecoshard
 import flask
+import inspring.ndr.ndr
 import numpy
 import requests
 import retrying
@@ -72,6 +73,7 @@ GLOBAL_LOCK = threading.Lock()
 WORK_QUEUE = queue.Queue()
 JOB_STATUS = {}
 APP = flask.Flask(__name__)
+PATH_MAP = {}
 
 
 def main():
@@ -85,7 +87,7 @@ def main():
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, 0)
 
     # used to create dynamic paths
-    path_map = {}
+
     download_task_map = {}
     # download all the base data
     for path_key_prefix, url in zip(
@@ -97,26 +99,26 @@ def main():
             path_key = '%s_zip_path' % path_key_prefix
         else:
             path_key = '%s_path' % path_key_prefix
-        path_map[path_key] = os.path.join(ECOSHARD_DIR, os.path.basename(url))
+        PATH_MAP[path_key] = os.path.join(ECOSHARD_DIR, os.path.basename(url))
         LOGGER.debug(
-            'scheduing download of %s: %s', path_key, path_map[path_key])
+            'scheduing download of %s: %s', path_key, PATH_MAP[path_key])
         download_task_map[path_key] = task_graph.add_task(
             func=ecoshard.download_url,
-            args=(url, path_map[path_key]),
-            target_path_list=[path_map[path_key]],
+            args=(url, PATH_MAP[path_key]),
+            target_path_list=[PATH_MAP[path_key]],
             task_name='download %s' % path_key)
 
-    for path_zip_key in [k for k in path_map if 'zip' in k]:
+    for path_zip_key in [k for k in PATH_MAP if 'zip' in k]:
         # unzip it
         path_key = path_zip_key.replace('_zip', '')
-        path_map[path_key] = path_map[path_zip_key].replace('.zip', '')
+        PATH_MAP[path_key] = PATH_MAP[path_zip_key].replace('.zip', '')
         unzip_token_path = os.path.join(
-            CHURN_DIR, '%s.UNZIPTOKEN' % os.path.basename(path_map[path_key]))
+            CHURN_DIR, '%s.UNZIPTOKEN' % os.path.basename(PATH_MAP[path_key]))
         LOGGER.debug(
-            'scheduing unzip of %s: %s', path_key, path_map[path_key])
+            'scheduing unzip of %s: %s', path_key, PATH_MAP[path_key])
         download_task_map[path_key] = task_graph.add_task(
             func=unzip_file,
-            args=(path_map[path_zip_key], path_map[path_key],
+            args=(PATH_MAP[path_zip_key], PATH_MAP[path_key],
                   unzip_token_path),
             target_path_list=[unzip_token_path],
             dependent_task_list=[download_task_map[path_zip_key]],
@@ -211,8 +213,7 @@ def ndr_worker(work_queue):
 
             # create local workspace
             ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
-            local_workspace = os.path.join(
-                WORKSPACE_DIR, ws_prefix)
+            local_workspace = os.path.join(WORKSPACE_DIR, ws_prefix)
             try:
                 os.makedirs(local_workspace)
             except OSError:
@@ -233,45 +234,37 @@ def ndr_worker(work_queue):
                 watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
                 local_watershed_path)
 
-            data_payload = {
-                'workspace_url': 'TEST_URL',
-                'watershed_basename': watershed_basename,
-                'fid': watershed_fid,
+            args = {
+                'workspace_dir': local_workspace,
+                'dem_path': PATH_MAP['dem_path'],
+                'lulc_path': PATH_MAP['lulc_path'],
+                'runoff_proxy_path': PATH_MAP['precip_path'],
+                'watersheds_path': local_watershed_path,
+                'biophysical_table_path': PATH_MAP['biophysical_path'],
+                'calc_p': False,
+                'calc_n': GLOBAL_NDR_ARGS['calc_n'],
+                'results_suffix': '',
+                'threshold_flow_accumulation': (
+                    GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
+                'n_workers': 0,
+                'target_sr_wkt': epsg_srs.ExportToWkt()
             }
-            LOGGER.debug('abount to callback to this url: %s', callback_url)
-            response = requests.post(callback_url, json=data_payload)
-            if not response.ok:
-                LOGGER.error(
-                    'something bad happened when scheduling worker: %s',
-                    str(response))
-
-            # clip/extract/project the DEM, precip, lulc, fert. to local workspace
-            # construct the args dict
-            # call NDR
-            # zip up the workspace
-            # copy workspace to bucket
-            # delete original workspace
-            # update global status
-            # post to callback url
-            # terminate
-            # ('dem', 'watersheds', 'precip', 'lulc', 'fertilizer',
-            #          'biophysical_table'),
-
-            # args = {
-            #     'workspace_dir':
-            #     'dem_path':
-            #     'lulc_path':
-            #     'runoff_proxy_path':
-            #     'watersheds_path':
-            #     'biophysical_table_path': path_map['biophysical_path']
-            #     'calc_p': False,
-            #     'calc_n': GLOBAL_NDR_ARGS['calc_n'].
-            #     'results_suffix': '',
-            #     'threshold_flow_accumulation': (
-            #         GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
-            #     'n_workers': -1,
-            #     'target_sr_wkt': target_sr_wkt
-            # }
+            try:
+                inspring.ndr.ndr.execute(args)
+                data_payload = {
+                    'workspace_url': 'TEST_URL',
+                    'watershed_basename': watershed_basename,
+                    'fid': watershed_fid,
+                }
+                LOGGER.debug('about to callback to this url: %s', callback_url)
+                response = requests.post(callback_url, json=data_payload)
+                if not response.ok:
+                    LOGGER.error(
+                        'something bad happened when scheduling worker: %s',
+                        str(response))
+            except Exception as e:
+                response = requests.post(callback_url, json={'error': str(e)})
+                raise
         except Exception:
             LOGGER.exception('something bad happened')
 
