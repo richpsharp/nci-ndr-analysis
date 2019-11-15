@@ -34,7 +34,7 @@ RUN /bin/bash -c "source ~/.bashrc; \
 WORKDIR /home/root
 RUN curl "https://d1vvhvl2y92vvt.cloudfront.net/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
     unzip awscliv2.zip && \
-    sudo ./aws/install && \
+    ./aws/install && \
     rm -rf aws awscliv2.zip
 
 RUN /usr/local/bin/aws configure set aws_access_key_id $AWS_ACCESS_KEY && \
