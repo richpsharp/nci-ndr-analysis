@@ -309,9 +309,9 @@ def ndr_worker(work_queue):
                     "zipping %s to %s", args['workspace_dir'], zipfile_path)
                 zipdir(args['workspace_dir'], zipfile_path)
                 subprocess.run(
-                    ["/usr/local/bin/aws2", "s3", "cp", zipfile_path,
+                    ["/usr/local/bin/aws2 s3 cp", zipfile_path,
                      "s3://nci-ecoshards/watershed_workspaces/%s" %
-                     os.path.basename(zipfile_path)], shell=True)
+                     os.path.basename(zipfile_path)], shell=True, check=True)
                 shutil.rmtree(args['workspace_dir'])
                 os.remove(dem_vrt_path)
                 workspace_url = (
