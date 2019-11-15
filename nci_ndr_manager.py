@@ -50,7 +50,7 @@ LOGGER = logging.getLogger(__name__)
 WORKER_QUEUE = queue.Queue()
 HOST_FILE_PATH = 'host_file.txt'
 DETECTOR_POLL_TIME = 5.0
-SCHEDULED_SET = set()
+SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
 GLOBAL_HOST_SET = set()
 
@@ -244,8 +244,15 @@ def processing_complete():
     watershed_basename = payload['watershed_basename']
     fid = payload['fid']
     workspace_url = payload['workspace_url']
-    LOGGER.debug('updating %s:%d complete', watershed_basename, fid)
-    # TODO -- re-register the worker/port
+    with GLOBAL_LOCK:
+        payload = SCHEDULED_MAP[(watershed_basename, fid)]
+        status_url = payload['status_url']
+        # re-register the worker/port
+        WORKER_QUEUE.put(payload['worker_ip_port'])
+    response = requests.get(status_url)
+    LOGGER.debug(
+        'updating %s:%d complete, status: %s', watershed_basename, fid,
+        response)
     connection = None
     cursor = None
     while True:
@@ -299,9 +306,10 @@ def schedule_worker(external_ip, worker_queue):
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
             LOGGER.debug('scheduling %s %d', watershed_basename, fid)
-            if (watershed_basename, fid) in SCHEDULED_SET:
-                LOGGER.warning(
-                    '%s already in schedule', (watershed_basename, fid))
+            with GLOBAL_LOCK:
+                if (watershed_basename, fid) in SCHEDULED_MAP:
+                    LOGGER.warning(
+                        '%s already in schedule', (watershed_basename, fid))
             worker_ip_port = worker_queue.get()
             with APP.app_context():
                 callback_url = flask.url_for(
@@ -320,7 +328,11 @@ def schedule_worker(external_ip, worker_queue):
             LOGGER.debug('sending job %s to %s', data_payload, worker_rest_url)
             response = requests.post(worker_rest_url, json=data_payload)
             if response.ok:
-                SCHEDULED_SET.add((watershed_basename, fid))
+                with GLOBAL_LOCK:
+                    SCHEDULED_MAP[(watershed_basename, fid)] = {
+                        'status_url': response.json()['status_url'],
+                        'worker_ip_port': worker_ip_port,
+                    }
             else:
                 LOGGER.error(
                     'something bad happened when scheduling worker: %s',
