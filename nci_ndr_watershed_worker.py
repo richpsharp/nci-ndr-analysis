@@ -306,11 +306,15 @@ def ndr_worker(work_queue):
                 zipdir(args['workspace_dir'], zipfile_path)
                 subprocess.run(
                     ["aws2", "s3", "cp", zipfile_path,
-                     "s3://nci-ecoshards/%s" % os.path.basename(zipfile_path)])
+                     "s3://nci-ecoshards/watershed_workspaces/%s" %
+                     os.path.basename(zipfile_path)])
                 shutil.rmtree(args['workspace_dir'])
                 os.remove(dem_vrt_path)
                 data_payload = {
-                    'workspace_url': 'TEST_URL',
+                    'workspace_url': (
+                        'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+                        'watershed_workspaces/%s' %
+                        os.path.basename(zipfile_path)),
                     'watershed_basename': watershed_basename,
                     'fid': watershed_fid,
                 }
