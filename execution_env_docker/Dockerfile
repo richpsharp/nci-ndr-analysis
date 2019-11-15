@@ -29,6 +29,18 @@ RUN /bin/bash -c "source ~/.bashrc; \
     pip install --no-cache-dir git+git://github.com/richpsharp/InSPRING.git@553e63902dc46614d27fabb9b46da0e84291fe27; \
     conda clean -a -y"
 
+WORKDIR /home/root
+RUN curl "https://d1vvhvl2y92vvt.cloudfront.net/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip &&
+    ./aws/install &&
+    rm -rf aws awscliv2.zip
+
+RUN /usr/local/bin/aws configure set aws_access_key_id $AWS_ACCESS_KEY &&
+    aws configure set aws_secret_access_key $AWS_SECRET_KEY &&
+    aws configure set default.region us-west-1
+
+RUN /usr/local/bin
+
 WORKDIR /var/workspace
 ENTRYPOINT ["/bin/bash", "-i", "execute.sh"]
 CMD []
