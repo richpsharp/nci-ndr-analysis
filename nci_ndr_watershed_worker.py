@@ -307,18 +307,31 @@ def ndr_worker(work_queue):
                 subprocess.run(
                     ["aws2", "s3", "cp", zipfile_path,
                      "s3://nci-ecoshards/watershed_workspaces/%s" %
-                     os.path.basename(zipfile_path)])
+                     os.path.basename(zipfile_path)], shell=True)
                 shutil.rmtree(args['workspace_dir'])
                 os.remove(dem_vrt_path)
+                workspace_url = (
+                    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+                    'watershed_workspaces/%s' %
+                    os.path.basename(zipfile_path))
+                try:
+                    head_request = requests.head()
+                    if not head_request:
+                        LOGGER.error(
+                            "something bad happened when checking if url "
+                            "workspace was live: %s", str(head_request))
+                        continue
+                except ConnectionError:
+                    LOGGER.exception(
+                        'a connection error when checking live url workspace')
+                    continue
                 data_payload = {
-                    'workspace_url': (
-                        'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-                        'watershed_workspaces/%s' %
-                        os.path.basename(zipfile_path)),
+                    'workspace_url': workspace_url,
                     'watershed_basename': watershed_basename,
                     'fid': watershed_fid,
                 }
-                LOGGER.debug('about to callback to this url: %s', callback_url)
+                LOGGER.debug(
+                    'about to callback to this url: %s', callback_url)
                 response = requests.post(callback_url, json=data_payload)
                 if not response.ok:
                     LOGGER.error(
