@@ -40,11 +40,9 @@ RUN curl "https://d1vvhvl2y92vvt.cloudfront.net/awscli-exe-linux-x86_64.zip" -o 
 ARG AWS_ACCESS_KEY
 ARG AWS_SECRET_KEY
 
-RUN /usr/local/bin/aws2 configure set aws_access_key_id $AWS_ACCESS_KEY
-RUN /usr/local/bin/aws2 configure set aws_secret_access_key $AWS_SECRET_KEY
-RUN /usr/local/bin/aws2 configure set default.region us-west-1
-
-RUN /usr/local/bin
+RUN /usr/local/bin/aws2 configure set aws_access_key_id $AWS_ACCESS_KEY && \
+    /usr/local/bin/aws2 configure set aws_secret_access_key $AWS_SECRET_KEY && \
+    /usr/local/bin/aws2 configure set default.region us-west-1
 
 WORKDIR /var/workspace
 ENTRYPOINT ["/bin/bash", "-i", "execute.sh"]
