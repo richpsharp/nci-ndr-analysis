@@ -26,7 +26,7 @@ RUN /bin/bash -c "source ~/.bashrc; \
     git+git://github.com/natcap/ecoshard.git@3b92d5925e8502f7536f1d51ba6fc404687c2926; \
     conda clean -a -y"
 RUN /bin/bash -c "source ~/.bashrc; \
-    pip install --no-cache-dir git+git://github.com/richpsharp/InSPRING.git@a70f05cd612237d5546e617365b5bfa4ae33b38e; \
+    pip install --no-cache-dir git+git://github.com/richpsharp/InSPRING.git@8198c57322535de4fa37f48b429f06414a02edad; \
     conda clean -a -y"
 
 WORKDIR /var/workspace
