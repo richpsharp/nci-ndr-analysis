@@ -11,6 +11,8 @@ import glob
 import logging
 import os
 import queue
+import shutil
+import subprocess
 import sys
 import threading
 import uuid
@@ -298,6 +300,14 @@ def ndr_worker(work_queue):
             }
             try:
                 inspring.ndr.ndr.execute(args)
+                zipfile_path = '%s.zip' % ws_prefix
+                LOGGER.debug(
+                    "zipping %s to %s", args['workspace_dir'], zipfile_path)
+                zipdir(args['workspace_dir'], zipfile_path)
+                subprocess.run(
+                    ["aws2", "s3", "cp", zipfile_path,
+                     "s3://nci-ecoshards/%s" % os.path.basename(zipfile_path)])
+                shutil.rmtree(args['workspace_dir'])
                 os.remove(dem_vrt_path)
                 data_payload = {
                     'workspace_url': 'TEST_URL',
@@ -415,6 +425,26 @@ def get_utm_epsg_srs(vector_path, fid):
     layer = None
     vector = None
     return epsg_srs
+
+
+def zipdir(dir_path, target_file):
+    """Zip a directory to a file.
+
+    Recurisvely zips the contents of `dir_path` to `target_file`.
+
+    Parameters:
+        dir_path (str): path to a directory.
+        target_file (str): path to target zipfile.
+
+    Returns:
+        None.
+
+    """
+    with zipfile.ZipFile(
+            target_file, 'w', zipfile.ZIP_DEFLATED) as zipfh:
+        for root, dirs, files in os.walk(dir_path):
+            for file in files:
+                zipfh.write(os.path.join(root, file))
 
 
 if __name__ == '__main__':
