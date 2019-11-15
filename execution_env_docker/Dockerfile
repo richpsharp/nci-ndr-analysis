@@ -10,6 +10,7 @@ RUN apt-get update \
     && apt-get install -y \
         build-essential \
         curl \
+        unzip \
         git \
         libspatialindex-c4v5 \
         mercurial \

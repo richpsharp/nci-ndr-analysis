@@ -174,6 +174,8 @@ def run_ndr():
         session_id = str(uuid.uuid4())
         status_url = flask.url_for(
             'get_status', _external=True, session_id=session_id)
+        with GLOBAL_LOCK:
+            JOB_STATUS[session_id] = 'SCHEDULED'
         WORK_QUEUE.put(
             (watershed_basename, fid, bucket_id, callback_url, session_id))
         return {'status_url': status_url}, 201
@@ -217,6 +219,8 @@ def ndr_worker(work_queue):
                 'would run right now if implemented %s', payload)
             (watershed_basename, watershed_fid, bucket_id,
              callback_url, session_id) = payload
+            with GLOBAL_LOCK:
+                JOB_STATUS[session_id] = 'RUNNING'
 
             # create local workspace
             ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
@@ -317,14 +321,13 @@ def ndr_worker(work_queue):
                 try:
                     head_request = requests.head(workspace_url)
                     if not head_request:
-                        LOGGER.error(
+                        raise RuntimeError(
                             "something bad happened when checking if url "
                             "workspace was live: %s", str(head_request))
-                        continue
                 except ConnectionError:
                     LOGGER.exception(
                         'a connection error when checking live url workspace')
-                    continue
+                    raise
                 data_payload = {
                     'workspace_url': workspace_url,
                     'watershed_basename': watershed_basename,
@@ -334,14 +337,18 @@ def ndr_worker(work_queue):
                     'about to callback to this url: %s', callback_url)
                 response = requests.post(callback_url, json=data_payload)
                 if not response.ok:
-                    LOGGER.error(
+                    raise RuntimeError(
                         'something bad happened when scheduling worker: %s',
                         str(response))
+                with GLOBAL_LOCK:
+                    JOB_STATUS[session_id] = 'COMPLETE'
             except Exception as e:
                 response = requests.post(callback_url, json={'error': str(e)})
                 raise
-        except Exception:
+        except Exception as e:
             LOGGER.exception('something bad happened')
+            with GLOBAL_LOCK:
+                JOB_STATUS[session_id] = 'ERROR: %s' % str(e)
 
 
 def reproject_geometry_to_target(
