@@ -305,7 +305,7 @@ def ndr_worker(work_queue):
                     "zipping %s to %s", args['workspace_dir'], zipfile_path)
                 zipdir(args['workspace_dir'], zipfile_path)
                 subprocess.run(
-                    ["aws2", "s3", "cp", zipfile_path,
+                    ["/usr/local/bin/aws2", "s3", "cp", zipfile_path,
                      "s3://nci-ecoshards/watershed_workspaces/%s" %
                      os.path.basename(zipfile_path)], shell=True)
                 shutil.rmtree(args['workspace_dir'])
@@ -315,7 +315,7 @@ def ndr_worker(work_queue):
                     'watershed_workspaces/%s' %
                     os.path.basename(zipfile_path))
                 try:
-                    head_request = requests.head()
+                    head_request = requests.head(workspace_url)
                     if not head_request:
                         LOGGER.error(
                             "something bad happened when checking if url "
