@@ -51,7 +51,7 @@ FERTILIZER_URL = (
 
 BIOPHYSICAL_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-    'NDR_representative_table_md5_958bdeb45eb93e54d924ccd16b6cafee.csv')
+    'NDR_representative_table_md5_de23b04ab70107f72181ca7784642b95.csv')
 
 GLOBAL_NDR_ARGS = {
     'threshold_flow_accumulation': 1000,
