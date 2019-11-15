@@ -241,6 +241,7 @@ def processing_complete():
 
     """
     payload = flask.request.get_json()
+    LOGGER.debug('this was the payload: %s', payload)
     watershed_basename = payload['watershed_basename']
     fid = payload['fid']
     workspace_url = payload['workspace_url']
