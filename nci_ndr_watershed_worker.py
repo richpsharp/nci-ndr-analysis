@@ -298,9 +298,7 @@ def ndr_worker(work_queue):
             }
             try:
                 inspring.ndr.ndr.execute(args)
-                for vrt_path in [dem_vrt_path, lulc_vrt_path, precip_vrt_path,
-                                 fertilizer_vrt_path]:
-                    os.remove(vrt_path)
+                os.remove(dem_vrt_path)
                 data_payload = {
                     'workspace_url': 'TEST_URL',
                     'watershed_basename': watershed_basename,
