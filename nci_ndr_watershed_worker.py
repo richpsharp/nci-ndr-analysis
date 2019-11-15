@@ -308,10 +308,12 @@ def ndr_worker(work_queue):
                 LOGGER.debug(
                     "zipping %s to %s", args['workspace_dir'], zipfile_path)
                 zipdir(args['workspace_dir'], zipfile_path)
+                zipfile_s3_uri = (
+                    "s3://nci-ecoshards/watershed_workspaces/%s" %
+                    os.path.basename(zipfile_path))
                 subprocess.run(
-                    ["/usr/local/bin/aws2 s3 cp", zipfile_path,
-                     "s3://nci-ecoshards/watershed_workspaces/%s" %
-                     os.path.basename(zipfile_path)], shell=True, check=True)
+                    ["/usr/local/bin/aws2 s3 cp %s %s" % (
+                        zipfile_path, zipfile_s3_uri)], shell=True, check=True)
                 shutil.rmtree(args['workspace_dir'])
                 os.remove(dem_vrt_path)
                 workspace_url = (
