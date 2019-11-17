@@ -49,6 +49,7 @@ logging.basicConfig(
         ' [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
+LOGGER.addHandler(logging.FileHandler('log.txt'))
 WORKER_QUEUE = queue.Queue()
 HOST_FILE_PATH = 'host_file.txt'
 DETECTOR_POLL_TIME = 15.0
@@ -341,8 +342,9 @@ def schedule_worker(external_ip, worker_queue):
                 LOGGER.error(
                     'something bad happened when scheduling worker: %s',
                     str(response))
-                if worker_ip_port in GLOBAL_HOST_SET:
-                    worker_queue.put(worker_ip_port)
+                with GLOBAL_LOCK:
+                    if worker_ip_port in GLOBAL_HOST_SET:
+                        worker_queue.put(worker_ip_port)
         cursor.close()
         connection.commit()
 
@@ -378,13 +380,16 @@ def host_file_monitor(host_file_path, worker_host_queue):
             host_set = set()
             for reservation in out_json['Reservations']:
                 for instance in reservation['Instances']:
-                    for tag in instance['Tags']:
-                        if tag['Value'] == WORKER_TAG_ID and (
-                                instance['State']['Name'] == (
-                                    'running')):
-                            host_set.add(
-                                '%s:8888' % instance['PrivateIpAddress'])
-                            break
+                    try:
+                        for tag in instance['Tags']:
+                            if tag['Value'] == WORKER_TAG_ID and (
+                                    instance['State']['Name'] == (
+                                        'running')):
+                                host_set.add(
+                                    '%s:8888' % instance['PrivateIpAddress'])
+                                break
+                    except Exception:
+                        LOGGER.exception('something bad happened')
             with GLOBAL_LOCK:
                 global GLOBAL_HOST_SET
                 old_host_set = GLOBAL_HOST_SET
