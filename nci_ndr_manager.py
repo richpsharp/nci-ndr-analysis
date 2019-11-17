@@ -341,6 +341,8 @@ def schedule_worker(external_ip, worker_queue):
                 LOGGER.error(
                     'something bad happened when scheduling worker: %s',
                     str(response))
+                if worker_ip_port in GLOBAL_HOST_SET:
+                    worker_queue.put(worker_ip_port)
         cursor.close()
         connection.commit()
 
