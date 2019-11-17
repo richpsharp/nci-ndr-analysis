@@ -8,11 +8,13 @@ https://docs.google.com/document/d/
 """
 import argparse
 import datetime
+import json
 import logging
 import os
 import pathlib
 import queue
 import sqlite3
+import subprocess
 import sys
 import threading
 import time
@@ -49,10 +51,11 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 WORKER_QUEUE = queue.Queue()
 HOST_FILE_PATH = 'host_file.txt'
-DETECTOR_POLL_TIME = 5.0
+DETECTOR_POLL_TIME = 15.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
 GLOBAL_HOST_SET = set()
+WORKER_TAG_ID = 'compute-server'
 
 APP = flask.Flask(__name__)
 
@@ -365,24 +368,27 @@ def host_file_monitor(host_file_path, worker_host_queue):
         never
 
     """
-    last_modified_time = 0
     while True:
         try:
-            current_modified_time = os.path.getmtime(host_file_path)
-            if current_modified_time != last_modified_time:
-                LOGGER.debug('checking change in hostfile')
-                last_modified_time = current_modified_time
-                with open(host_file_path, 'r') as ip_file:
-                    ip_file_contents = ip_file.readlines()
-                with GLOBAL_LOCK:
-                    global GLOBAL_HOST_SET
-                    old_host_set = GLOBAL_HOST_SET
-                    GLOBAL_HOST_SET = set([
-                        line.strip() for line in ip_file_contents])
-                    new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
-                    LOGGER.debug('here are the new hosts: %s', new_hosts)
-                    for new_host in new_hosts:
-                        worker_host_queue.put(new_host)
+            raw_output = subprocess.check_output('aws2 ec2 describe-instances')
+            out_json = json.loads(raw_output)
+            host_set = set()
+            for reservation in out_json['Reservations']:
+                for instance in reservation['Instances']:
+                    for tag in instance['Tags']:
+                        if tag['Value'] == WORKER_TAG_ID and (
+                                instance['State']['Name'] == (
+                                    'running')):
+                            host_set.add(instance['PrivateIpAddress'])
+                            break
+            with GLOBAL_LOCK:
+                global GLOBAL_HOST_SET
+                old_host_set = GLOBAL_HOST_SET
+                GLOBAL_HOST_SET = host_set
+                new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
+                LOGGER.debug('here are the new hosts: %s', new_hosts)
+                for new_host in new_hosts:
+                    worker_host_queue.put(new_host)
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `host_file_monitor`')
