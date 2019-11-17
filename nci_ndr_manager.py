@@ -372,7 +372,8 @@ def host_file_monitor(host_file_path, worker_host_queue):
     """
     while True:
         try:
-            raw_output = subprocess.check_output('aws2 ec2 describe-instances')
+            raw_output = subprocess.check_output(
+                'aws2 ec2 describe-instances', shell=True)
             out_json = json.loads(raw_output)
             host_set = set()
             for reservation in out_json['Reservations']:
