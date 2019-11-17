@@ -381,7 +381,8 @@ def host_file_monitor(host_file_path, worker_host_queue):
                         if tag['Value'] == WORKER_TAG_ID and (
                                 instance['State']['Name'] == (
                                     'running')):
-                            host_set.add(instance['PrivateIpAddress'])
+                            host_set.add(
+                                '%s:8888' % instance['PrivateIpAddress'])
                             break
             with GLOBAL_LOCK:
                 global GLOBAL_HOST_SET
