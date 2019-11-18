@@ -442,14 +442,8 @@ def schedule_worker(external_ip):
         raise
 
 
-def host_file_monitor(host_file_path):
-    """Watch host_file_path & update worker_host_queue.
-
-    Parameters:
-        host_file_path (str): path to a file that contains lines
-            of http://[host]:[port]<?label> that can be used to send inference
-            work to. <label> can be used to use the same machine more than
-            once.
+def host_file_monitor():
+    """Watch for AWS worker instances on the network.
 
     Returns:
         never
@@ -487,12 +481,8 @@ if __name__ == '__main__':
         help='define external IP that can be used to connect to this app')
     args = parser.parse_args()
     main(args.external_ip)
-    if not os.path.exists(HOST_FILE_PATH):
-        with open(HOST_FILE_PATH, 'w') as host_file:
-            host_file.write('')
     host_file_monitor_thread = threading.Thread(
-        target=host_file_monitor,
-        args=(HOST_FILE_PATH,))
+        target=host_file_monitor)
     host_file_monitor_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
