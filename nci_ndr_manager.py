@@ -88,7 +88,7 @@ class WorkerStateSet(object):
                     ready_host = next(iter(self.ready_host_set))
                     self.ready_host_set.remove(ready_host)
                     self.running_host_set.add(ready_host)
-                    break
+                    return ready_host
 
     def remove_host(self, host):
         """Remove a host from the ready or running set."""
