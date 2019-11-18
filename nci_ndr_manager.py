@@ -21,6 +21,7 @@ import zipfile
 
 import flask
 from osgeo import gdal
+gdal.SetCacheMax(2**30)
 import ecoshard
 import requests
 import retrying
@@ -281,6 +282,30 @@ def create_status_database(
 
     with open(complete_token_path, 'w') as token_file:
         token_file.write(str(datetime.datetime.now()))
+
+
+@APP.route('/processing_status')
+def processing_status():
+    """Return the state of processing."""
+    try:
+        ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
+        connection = sqlite3.connect(ro_uri, uri=True)
+        cursor = connection.cursor()
+        LOGGER.debug('querying prescheduled')
+        cursor.execute('SELECT count(1) from job_status')
+        total_count = int(cursor.fetchone()[0])
+        cursor.execute(
+            'SELECT count(1) from job_status '
+            'where job_status=\'PRESCHEDULED\'')
+        prescheduled_count = int(cursor.fetchone()[0])
+        processed_count = total_count - prescheduled_count
+        result_string = (
+            'total to process: %s<br>percent complete: %s%% (%s)' % (
+                total_count, processed_count/total_count*100,
+                processed_count))
+        return result_string
+    except Exception as e:
+        return 'error: %s' % str(e)
 
 
 @APP.route('/api/v1/processing_complete', methods=['POST'])
