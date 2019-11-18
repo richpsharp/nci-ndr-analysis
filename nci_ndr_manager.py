@@ -91,6 +91,10 @@ class WorkerStateSet(object):
                     self.running_host_set.add(ready_host)
                     return ready_host
 
+    def get_counts(self):
+        with self.lock:
+            return len(self.running_host_set), len(self.ready_host_set)
+
     def remove_host(self, host):
         """Remove a host from the ready or running set."""
         with self.lock:
@@ -299,10 +303,15 @@ def processing_status():
             'where job_status=\'PRESCHEDULED\'')
         prescheduled_count = int(cursor.fetchone()[0])
         processed_count = total_count - prescheduled_count
+        active_count, ready_count = (
+            GLOBAL_WORKER_STATE_SET.get_counts())
         result_string = (
-            'total to process: %s<br>percent complete: %s%% (%s)' % (
+            'total to process: %s<br>'
+            'percent complete: %.2f%% (%s)<br>'
+            'active workers: %d<br>'
+            'ready workers: %d<br>' % (
                 total_count, processed_count/total_count*100,
-                processed_count))
+                processed_count, active_count, ready_count))
         return result_string
     except Exception as e:
         return 'error: %s' % str(e)
