@@ -411,6 +411,7 @@ def schedule_worker(external_ip):
             # send job
             while True:
                 try:
+                    LOGGER.debug('payload: %s', data_payload)
                     worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
                     worker_rest_url = (
                         'http://%s/api/v1/run_ndr' % worker_ip_port)
@@ -485,7 +486,7 @@ if __name__ == '__main__':
         target=host_file_monitor)
     host_file_monitor_thread.start()
 
-    # APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
+    APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
         port=args.app_port)
