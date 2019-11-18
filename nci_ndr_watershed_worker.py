@@ -19,6 +19,8 @@ import uuid
 import zipfile
 
 from osgeo import gdal
+# set a 1GB limit for the cache
+gdal.SetCacheMax(2**30)
 from osgeo import ogr
 from osgeo import osr
 import ecoshard
