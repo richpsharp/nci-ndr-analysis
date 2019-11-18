@@ -485,7 +485,7 @@ if __name__ == '__main__':
         target=host_file_monitor)
     host_file_monitor_thread.start()
 
-    APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
+    # APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
         port=args.app_port)
