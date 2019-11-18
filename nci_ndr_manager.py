@@ -363,7 +363,6 @@ def schedule_worker(external_ip):
                     LOGGER.warning(
                         '%s already in schedule', (watershed_basename, fid))
 
-            worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
             with APP.app_context():
                 callback_url = flask.url_for(
                     'processing_complete', _external=True)
@@ -376,21 +375,27 @@ def schedule_worker(external_ip):
             }
 
             # send job
-            worker_rest_url = (
-                'http://%s/api/v1/run_ndr' % worker_ip_port)
-            LOGGER.debug('sending job %s to %s', data_payload, worker_rest_url)
-            response = requests.post(worker_rest_url, json=data_payload)
-            if response.ok:
-                with GLOBAL_LOCK:
-                    SCHEDULED_MAP[(watershed_basename, fid)] = {
-                        'status_url': response.json()['status_url'],
-                        'worker_ip_port': worker_ip_port,
-                    }
-            else:
-                LOGGER.error(
-                    'something bad happened when scheduling worker: %s',
-                    str(response))
-                GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
+            while True:
+                try:
+                    worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+                    worker_rest_url = (
+                        'http://%s/api/v1/run_ndr' % worker_ip_port)
+                    LOGGER.debug(
+                        'sending job %s to %s', data_payload, worker_rest_url)
+                    response = requests.post(
+                        worker_rest_url, json=data_payload)
+                    if response.ok:
+                        with GLOBAL_LOCK:
+                            SCHEDULED_MAP[(watershed_basename, fid)] = {
+                                'status_url': response.json()['status_url'],
+                                'worker_ip_port': worker_ip_port,
+                            }
+                    else:
+                        raise RuntimeError(str(response))
+                except Exception:
+                    LOGGER.exception(
+                        'something bad happened, removing %s', worker_ip_port)
+                    GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         cursor.close()
         connection.commit()
 
