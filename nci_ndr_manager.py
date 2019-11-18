@@ -78,7 +78,7 @@ class WorkerStateSet(object):
             self.host_ready_event.set()
             return True
 
-    def get_ready_host(self, host):
+    def get_ready_host(self):
         """Blocking call to fetch a ready host."""
         while True:
             # this blocks until there is something in the ready host set
