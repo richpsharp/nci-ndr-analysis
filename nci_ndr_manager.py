@@ -392,6 +392,7 @@ def schedule_worker(external_ip):
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
             LOGGER.debug('scheduling %s %d', watershed_basename, fid)
+            continue
             with GLOBAL_LOCK:
                 if (watershed_basename, fid) in SCHEDULED_MAP:
                     LOGGER.warning(
