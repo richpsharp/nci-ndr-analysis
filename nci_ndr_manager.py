@@ -392,7 +392,6 @@ def schedule_worker(external_ip):
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
             LOGGER.debug('scheduling %s %d', watershed_basename, fid)
-            continue
             with GLOBAL_LOCK:
                 if (watershed_basename, fid) in SCHEDULED_MAP:
                     LOGGER.warning(
@@ -426,6 +425,7 @@ def schedule_worker(external_ip):
                                 'status_url': response.json()['status_url'],
                                 'worker_ip_port': worker_ip_port,
                             }
+                        break
                     else:
                         raise RuntimeError(str(response))
                 except Exception:
@@ -488,7 +488,6 @@ if __name__ == '__main__':
     host_file_monitor_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
-    APP.debug = True
     APP.run(
         host='0.0.0.0',
         port=args.app_port)
