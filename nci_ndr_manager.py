@@ -12,7 +12,6 @@ import json
 import logging
 import os
 import pathlib
-import queue
 import sqlite3
 import subprocess
 import sys
@@ -50,15 +49,65 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.FileHandler('log.txt'))
-WORKER_QUEUE = queue.Queue()
 HOST_FILE_PATH = 'host_file.txt'
 DETECTOR_POLL_TIME = 15.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
-GLOBAL_HOST_SET = set()
+GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
+GLOBAL_RUNNING_HOST_SET = set()  # hosts that are active
+GLOBAL_FAILED_HOST_SET = set()  # hosts that failed to connect or other error
 WORKER_TAG_ID = 'compute-server'
 
 APP = flask.Flask(__name__)
+
+
+class WorkerStateSet(object):
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.host_ready_event = threading.Event()
+        self.ready_host_set = set()
+        self.running_host_set = set()
+
+    def add_host(self, host):
+        """Add a host if it's not already in the set."""
+        with self.lock:
+            for internal_set in [self.ready_host_set, self.running_host_set]:
+                if host in internal_set:
+                    return False
+            self.ready_host_set.add(host)
+            self.host_ready_event.set()
+            return True
+
+    def get_ready_host(self, host):
+        """Blocking call to fetch a ready host."""
+        while True:
+            # this blocks until there is something in the ready host set
+            self.host_ready_event.wait()
+            with self.lock:
+                if self.ready_host_set:
+                    ready_host = next(iter(self.ready_host_set))
+                    self.ready_host_set.remove(ready_host)
+                    self.running_host_set.add(ready_host)
+                    break
+
+    def remove_host(self, host):
+        """Remove a host from the ready or running set."""
+        with self.lock:
+            for internal_set in [self.ready_host_set, self.running_host_set]:
+                if host in internal_set:
+                    internal_set.remove(host)
+                    return True
+            raise ValueError('%s not in set' % host)
+
+    def set_ready_host(self, host):
+        """Indicate a running host is now ready for use."""
+        with self.lock:
+            self.running_host_set.remove(host)
+            self.ready_host_set.add(host)
+            self.host_ready_event.set()
+
+
+GLOBAL_WORKER_STATE_SET = WorkerStateSet()
 
 
 def main(external_ip):
@@ -120,7 +169,7 @@ def main(external_ip):
 
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
-        args=(external_ip, WORKER_QUEUE,))
+        args=(external_ip,))
     schedule_worker_thread.start()
 
 
@@ -253,7 +302,7 @@ def processing_complete():
         payload = SCHEDULED_MAP[(watershed_basename, fid)]
         status_url = payload['status_url']
         # re-register the worker/port
-        WORKER_QUEUE.put(payload['worker_ip_port'])
+        GLOBAL_WORKER_STATE_SET.set_ready_host(payload['worker_ip_port'])
     response = requests.get(status_url)
     LOGGER.debug(
         'updating %s:%d complete, status: %s', watershed_basename, fid,
@@ -285,13 +334,11 @@ def processing_complete():
 
 
 @retrying.retry()
-def schedule_worker(external_ip, worker_queue):
+def schedule_worker(external_ip):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
         external_ip (str): IP address used as a base to define build urls.
-        worker_queue (queue): queue ip/port strings that can be used to connect
-            to workers via RESTful API.
 
     Returns:
         None.
@@ -315,7 +362,8 @@ def schedule_worker(external_ip, worker_queue):
                 if (watershed_basename, fid) in SCHEDULED_MAP:
                     LOGGER.warning(
                         '%s already in schedule', (watershed_basename, fid))
-            worker_ip_port = worker_queue.get()
+
+            worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
             with APP.app_context():
                 callback_url = flask.url_for(
                     'processing_complete', _external=True)
@@ -342,9 +390,7 @@ def schedule_worker(external_ip, worker_queue):
                 LOGGER.error(
                     'something bad happened when scheduling worker: %s',
                     str(response))
-                with GLOBAL_LOCK:
-                    if worker_ip_port in GLOBAL_HOST_SET:
-                        worker_queue.put(worker_ip_port)
+                GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         cursor.close()
         connection.commit()
 
@@ -357,7 +403,7 @@ def schedule_worker(external_ip, worker_queue):
         raise
 
 
-def host_file_monitor(host_file_path, worker_host_queue):
+def host_file_monitor(host_file_path):
     """Watch host_file_path & update worker_host_queue.
 
     Parameters:
@@ -365,8 +411,6 @@ def host_file_monitor(host_file_path, worker_host_queue):
             of http://[host]:[port]<?label> that can be used to send inference
             work to. <label> can be used to use the same machine more than
             once.
-        worker_host_queue (queue.Queue): new hosts are queued here
-            so they can be pulled by other workers later.
 
     Returns:
         never
@@ -377,7 +421,6 @@ def host_file_monitor(host_file_path, worker_host_queue):
             raw_output = subprocess.check_output(
                 'aws2 ec2 describe-instances', shell=True)
             out_json = json.loads(raw_output)
-            host_set = set()
             for reservation in out_json['Reservations']:
                 for instance in reservation['Instances']:
                     try:
@@ -385,19 +428,11 @@ def host_file_monitor(host_file_path, worker_host_queue):
                             if tag['Value'] == WORKER_TAG_ID and (
                                     instance['State']['Name'] == (
                                         'running')):
-                                host_set.add(
+                                GLOBAL_WORKER_STATE_SET.add_host(
                                     '%s:8888' % instance['PrivateIpAddress'])
                                 break
                     except Exception:
                         LOGGER.exception('something bad happened')
-            with GLOBAL_LOCK:
-                global GLOBAL_HOST_SET
-                old_host_set = GLOBAL_HOST_SET
-                GLOBAL_HOST_SET = host_set
-                new_hosts = GLOBAL_HOST_SET.difference(old_host_set)
-                LOGGER.debug('here are the new hosts: %s', new_hosts)
-                for new_host in new_hosts:
-                    worker_host_queue.put(new_host)
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `host_file_monitor`')
@@ -418,7 +453,7 @@ if __name__ == '__main__':
             host_file.write('')
     host_file_monitor_thread = threading.Thread(
         target=host_file_monitor,
-        args=(HOST_FILE_PATH, WORKER_QUEUE))
+        args=(HOST_FILE_PATH,))
     host_file_monitor_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
