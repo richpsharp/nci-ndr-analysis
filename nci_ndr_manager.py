@@ -523,11 +523,11 @@ def worker_status_monitor():
                     else:
                         failed_job_list.put(watershed_fid_tuple)
                         total_area += value['total_area']
-                    # it failed so we should remove it from the potential
-                    # host list because we don't know why. If it's still up
-                    # it will be added back by another worker
-                    GLOBAL_WORKER_STATE_SET.remove_host(
-                        value['worker_ip_port'])
+                        # it failed so we should remove it from the potential
+                        # host list because we don't know why. If it's still up
+                        # it will be added back by another worker
+                        GLOBAL_WORKER_STATE_SET.remove_host(
+                            value['worker_ip_port'])
         for watershed_fid_tuple in failed_job_list:
             LOGGER.debug('rescheduling %s', str(watershed_fid_tuple))
             with GLOBAL_LOCK:
