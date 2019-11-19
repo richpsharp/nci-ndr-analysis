@@ -510,7 +510,7 @@ def host_file_monitor():
 def worker_status_monitor():
     """Monitor the status of watershed workers and reschedule if down."""
     while True:
-        time.sleep(10)
+        time.sleep(30)
         current_time = time.time()
         failed_job_list = []
         with GLOBAL_LOCK:

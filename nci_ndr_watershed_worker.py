@@ -352,7 +352,7 @@ def ndr_worker(work_queue):
                     raise
             data_payload = {
                 'watershed_fid_url_list': watershed_fid_url_list,
-                'total_time_per_area': (time.time()-start_time) / total_area
+                'time_per_area': (time.time()-start_time) / total_area
             }
             LOGGER.debug(
                 'about to callback to this url: %s', callback_url)
