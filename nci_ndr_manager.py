@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import pathlib
+import queue
 import sqlite3
 import subprocess
 import sys
@@ -58,6 +59,8 @@ GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
 GLOBAL_RUNNING_HOST_SET = set()  # hosts that are active
 GLOBAL_FAILED_HOST_SET = set()  # hosts that failed to connect or other error
 WORKER_TAG_ID = 'compute-server'
+RESULT_QUEUE = queue.Queue()
+
 
 APP = flask.Flask(__name__)
 
@@ -331,40 +334,56 @@ def processing_complete():
     LOGGER.debug('this was the payload: %s', payload)
     watershed_basename = payload['watershed_basename']
     fid = payload['fid']
-    workspace_url = payload['workspace_url']
+    RESULT_QUEUE.put(payload)
     with GLOBAL_LOCK:
-        payload = SCHEDULED_MAP[(watershed_basename, fid)]
-        status_url = payload['status_url']
+        status_url = SCHEDULED_MAP[(watershed_basename, fid)]['status_url']
         # re-register the worker/port
         GLOBAL_WORKER_STATE_SET.set_ready_host(payload['worker_ip_port'])
     response = requests.get(status_url)
     LOGGER.debug(
         'updating %s:%d complete, status: %s', watershed_basename, fid,
         response)
-    connection = None
-    cursor = None
+    return '%s:%d complete' % (watershed_basename, fid), 202
+
+
+def insert_result_worker():
+    """Monitor result queue and add to database as needed."""
     while True:
         try:
-            connection = sqlite3.connect(STATUS_DATABASE_PATH)
-            cursor = connection.cursor()
-            cursor.execute(
-                'UPDATE job_status '
-                'SET workspace_url=?, job_status=\'DEBUG\' '
-                'WHERE watershed_basename=? AND fid=?',
-                (workspace_url, watershed_basename, fid))
+            connection = None
+            cursor = None
+            LOGGER.debug('waiting for result')
+            payload = RESULT_QUEUE.get()
+            workspace_url, watershed_basename, fid = payload
+            while True:
+                try:
+                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                    cursor = connection.cursor()
+                except Exception:
+                    LOGGER.exception('error on connection')
+                    time.sleep(0.1)
+                    continue
+                while True:
+                    cursor.execute(
+                        'UPDATE job_status '
+                        'SET workspace_url=?, job_status=\'DEBUG\' '
+                        'WHERE watershed_basename=? AND fid=?',
+                        (workspace_url, watershed_basename, fid))
+                    LOGGER.debug('%s:%d inserted', watershed_basename, fid)
+                    try:
+                        payload = RESULT_QUEUE.get()
+                        workspace_url, watershed_basename, fid = payload
+                    except queue.Empty:
+                        break
+                break
             cursor.close()
             connection.commit()
-            break
         except Exception:
-            LOGGER.exception(
-                'exception when inserting %s:%d, trying again',
-                watershed_basename, fid)
+            LOGGER.exception('unhandled exception')
             if connection:
                 connection.commit()
             if cursor:
                 cursor.close()
-    LOGGER.debug('%s:%d complete', watershed_basename, fid)
-    return '%s:%d complete' % (watershed_basename, fid), 202
 
 
 @retrying.retry()
@@ -486,6 +505,10 @@ if __name__ == '__main__':
     host_file_monitor_thread = threading.Thread(
         target=host_file_monitor)
     host_file_monitor_thread.start()
+
+    insert_result_woker = threading.Thread(
+        target=insert_result_worker)
+    insert_result_worker.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
