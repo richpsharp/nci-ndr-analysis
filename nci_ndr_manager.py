@@ -106,7 +106,8 @@ class WorkerStateSet(object):
                 if host in internal_set:
                     internal_set.remove(host)
                     return True
-            raise ValueError('%s not in set' % host)
+            LOGGER.warn('%s not in set' % host)
+            return False
 
     def set_ready_host(self, host):
         """Indicate a running host is now ready for use."""
