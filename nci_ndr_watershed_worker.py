@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
 import zipfile
 
@@ -170,8 +171,7 @@ def run_ndr():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('got post: %s', str(payload))
-        watershed_basename = payload['watershed_basename']
-        fid = payload['fid']
+        watershed_fid_tuple_list = payload['watershed_fid_tuple_list']
         bucket_id = payload['bucket_id']
         callback_url = payload['callback_url']
         session_id = str(uuid.uuid4())
@@ -180,7 +180,7 @@ def run_ndr():
         with GLOBAL_LOCK:
             JOB_STATUS[session_id] = 'SCHEDULED'
         WORK_QUEUE.put(
-            (watershed_basename, fid, bucket_id, callback_url, session_id))
+            (watershed_fid_tuple_list, bucket_id, callback_url, session_id))
         return {'status_url': status_url}, 201
     except Exception as e:
         LOGGER.exception('an execption occured')
@@ -220,138 +220,151 @@ def ndr_worker(work_queue):
     while True:
         try:
             payload = work_queue.get()
-            LOGGER.debug(
-                'would run right now if implemented %s', payload)
-            (watershed_basename, watershed_fid, bucket_id,
-             callback_url, session_id) = payload
+            (watershed_fid_tuple_list, bucket_id, callback_url,
+                session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
-
-            # create local workspace
-            ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
-            local_workspace = os.path.join(WORKSPACE_DIR, ws_prefix)
-            try:
-                os.makedirs(local_workspace)
-            except OSError:
-                LOGGER.exception('unable to create %s', local_workspace)
-
-            # extract the watershed to workspace/data
-            watershed_root_path = os.path.join(
-                ECOSHARD_DIR,
-                'watersheds_globe_HydroSHEDS_15arcseconds_'
-                'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
-                'watersheds_globe_HydroSHEDS_15arcseconds',
-                '%s.shp' % watershed_basename)
-            epsg_srs = get_utm_epsg_srs(watershed_root_path, watershed_fid)
-            local_watershed_path = os.path.join(
-                local_workspace, '%s.gpkg' % ws_prefix)
-
-            # the dem is in lat/lng and is also a big set of tiles. Make a VRT
-            # which is the bounds of the lat/lng of the watershed and use that
-            # as the dem path argument
-            watershed_vector = gdal.OpenEx(watershed_root_path, gdal.OF_VECTOR)
-            watershed_layer = watershed_vector.GetLayer()
-            watershed_feature = watershed_layer.GetFeature(watershed_fid)
-            watershed_geom = watershed_feature.GetGeometryRef()
-            x1, x2, y1, y2 = watershed_geom.GetEnvelope()
-            watershed_geom = None
-            watershed_feature = None
-            watershed_layer = None
-            watershed_vector = None
-
-            watershed_bounding_box = [
-                min(x1, x2),
-                min(y1, y2),
-                max(x1, x2),
-                max(y1, y2)]
-
-            vrt_options = gdal.BuildVRTOptions(
-                outputBounds=(
-                    min(x1, x2)-0.1,
-                    min(y1, y2)-0.1,
-                    max(x1, x2)+0.1,
-                    max(y1, y2)+0.1)
-            )
-            dem_dir_path = os.path.join(PATH_MAP['dem_path'], 'global_dem_3s')
-            dem_vrt_path = os.path.join(
-                dem_dir_path, '%s_%s_vrt.vrt' % (
-                    watershed_basename, watershed_fid))
-            gdal.BuildVRT(
-                dem_vrt_path, glob.glob(os.path.join(dem_dir_path, '*.tif')),
-                options=vrt_options)
-
-            target_bounding_box = pygeoprocessing.transform_bounding_box(
-                watershed_bounding_box, wgs84_sr.ExportToWkt(),
-                epsg_srs.ExportToWkt())
-
-            reproject_geometry_to_target(
-                watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
-                local_watershed_path)
-
-            args = {
-                'workspace_dir': local_workspace,
-                'dem_path': dem_vrt_path,
-                'lulc_path': PATH_MAP['lulc_path'],
-                'runoff_proxy_path': PATH_MAP['precip_path'],
-                'ag_load_path': PATH_MAP['fertilizer_path'],
-                'watersheds_path': local_watershed_path,
-                'biophysical_table_path': PATH_MAP['biophysical_table_path'],
-                'calc_n': True,
-                'calc_p': False,
-                'results_suffix': '',
-                'threshold_flow_accumulation': (
-                    GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
-                'k_param': GLOBAL_NDR_ARGS['k_param'],
-                'n_workers': -1,
-                'target_sr_wkt': epsg_srs.ExportToWkt(),
-                'target_pixel_size': TARGET_PIXEL_SIZE,
-                'target_bounding_box': target_bounding_box
-            }
-            try:
-                inspring.ndr.ndr.execute(args)
-                zipfile_path = '%s.zip' % ws_prefix
-                LOGGER.debug(
-                    "zipping %s to %s", args['workspace_dir'], zipfile_path)
-                zipdir(args['workspace_dir'], zipfile_path)
-                zipfile_s3_uri = (
-                    "s3://nci-ecoshards/watershed_workspaces/%s" %
-                    os.path.basename(zipfile_path))
-                subprocess.run(
-                    ["/usr/local/bin/aws2 s3 cp %s %s" % (
-                        zipfile_path, zipfile_s3_uri)], shell=True, check=True)
-                shutil.rmtree(args['workspace_dir'])
-                os.remove(dem_vrt_path)
-                workspace_url = (
-                    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-                    'watershed_workspaces/%s' %
-                    os.path.basename(zipfile_path))
+            watershed_fid_url_list = []
+            start_time = time.time()
+            total_area = 0.0
+            for watershed_basename, watershed_fid, watershed_area in (
+                    watershed_fid_tuple_list):
+                total_area += watershed_area
+                # create local workspace
+                ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)
+                local_workspace = os.path.join(WORKSPACE_DIR, ws_prefix)
                 try:
-                    head_request = requests.head(workspace_url)
-                    if not head_request:
-                        raise RuntimeError(
-                            "something bad happened when checking if url "
-                            "workspace was live: %s", str(head_request))
-                except ConnectionError:
-                    LOGGER.exception(
-                        'a connection error when checking live url workspace')
-                    raise
-                data_payload = {
-                    'workspace_url': workspace_url,
-                    'watershed_basename': watershed_basename,
-                    'fid': watershed_fid,
+                    os.makedirs(local_workspace)
+                except OSError:
+                    LOGGER.exception('unable to create %s', local_workspace)
+
+                # extract the watershed to workspace/data
+                watershed_root_path = os.path.join(
+                    ECOSHARD_DIR,
+                    'watersheds_globe_HydroSHEDS_15arcseconds_'
+                    'blake2b_14ac9c77d2076d51b0258fd94d9378d4',
+                    'watersheds_globe_HydroSHEDS_15arcseconds',
+                    '%s.shp' % watershed_basename)
+                epsg_srs = get_utm_epsg_srs(watershed_root_path, watershed_fid)
+                local_watershed_path = os.path.join(
+                    local_workspace, '%s.gpkg' % ws_prefix)
+
+                # the dem is in lat/lng and is also a big set of tiles. Make a
+                # VRT which is the bounds of the lat/lng of the watershed and
+                # use that as the dem path argument
+                watershed_vector = gdal.OpenEx(
+                    watershed_root_path, gdal.OF_VECTOR)
+                watershed_layer = watershed_vector.GetLayer()
+                watershed_feature = watershed_layer.GetFeature(watershed_fid)
+                watershed_geom = watershed_feature.GetGeometryRef()
+                x1, x2, y1, y2 = watershed_geom.GetEnvelope()
+                watershed_geom = None
+                watershed_feature = None
+                watershed_layer = None
+                watershed_vector = None
+
+                watershed_bounding_box = [
+                    min(x1, x2),
+                    min(y1, y2),
+                    max(x1, x2),
+                    max(y1, y2)]
+
+                vrt_options = gdal.BuildVRTOptions(
+                    outputBounds=(
+                        min(x1, x2)-0.1,
+                        min(y1, y2)-0.1,
+                        max(x1, x2)+0.1,
+                        max(y1, y2)+0.1)
+                )
+                dem_dir_path = os.path.join(
+                    PATH_MAP['dem_path'], 'global_dem_3s')
+                dem_vrt_path = os.path.join(
+                    dem_dir_path, '%s_%s_vrt.vrt' % (
+                        watershed_basename, watershed_fid))
+                gdal.BuildVRT(
+                    dem_vrt_path, glob.glob(
+                        os.path.join(dem_dir_path, '*.tif')),
+                    options=vrt_options)
+
+                target_bounding_box = pygeoprocessing.transform_bounding_box(
+                    watershed_bounding_box, wgs84_sr.ExportToWkt(),
+                    epsg_srs.ExportToWkt())
+
+                reproject_geometry_to_target(
+                    watershed_root_path, watershed_fid, epsg_srs.ExportToWkt(),
+                    local_watershed_path)
+
+                args = {
+                    'workspace_dir': local_workspace,
+                    'dem_path': dem_vrt_path,
+                    'lulc_path': PATH_MAP['lulc_path'],
+                    'runoff_proxy_path': PATH_MAP['precip_path'],
+                    'ag_load_path': PATH_MAP['fertilizer_path'],
+                    'watersheds_path': local_watershed_path,
+                    'biophysical_table_path': (
+                        PATH_MAP['biophysical_table_path']),
+                    'calc_n': True,
+                    'calc_p': False,
+                    'results_suffix': '',
+                    'threshold_flow_accumulation': (
+                        GLOBAL_NDR_ARGS['threshold_flow_accumulation']),
+                    'k_param': GLOBAL_NDR_ARGS['k_param'],
+                    'n_workers': -1,
+                    'target_sr_wkt': epsg_srs.ExportToWkt(),
+                    'target_pixel_size': TARGET_PIXEL_SIZE,
+                    'target_bounding_box': target_bounding_box
                 }
-                LOGGER.debug(
-                    'about to callback to this url: %s', callback_url)
-                response = requests.post(callback_url, json=data_payload)
-                if not response.ok:
-                    raise RuntimeError(
-                        'something bad happened when scheduling worker: %s',
-                        str(response))
-                with GLOBAL_LOCK:
-                    JOB_STATUS[session_id] = 'COMPLETE'
-            except Exception as e:
-                response = requests.post(callback_url, json={'error': str(e)})
-                raise
+                try:
+                    inspring.ndr.ndr.execute(args)
+                    zipfile_path = '%s.zip' % ws_prefix
+                    LOGGER.debug(
+                        "zipping %s to %s", args['workspace_dir'],
+                        zipfile_path)
+                    zipdir(args['workspace_dir'], zipfile_path)
+                    zipfile_s3_uri = (
+                        "s3://nci-ecoshards/watershed_workspaces/%s" %
+                        os.path.basename(zipfile_path))
+                    subprocess.run(
+                        ["/usr/local/bin/aws2 s3 cp %s %s" % (
+                            zipfile_path, zipfile_s3_uri)], shell=True,
+                        check=True)
+                    shutil.rmtree(args['workspace_dir'])
+                    os.remove(dem_vrt_path)
+                    workspace_url = (
+                        'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+                        'watershed_workspaces/%s' %
+                        os.path.basename(zipfile_path))
+                    try:
+                        head_request = requests.head(workspace_url)
+                        if not head_request:
+                            raise RuntimeError(
+                                "something bad happened when checking if url "
+                                "workspace was live: %s", str(head_request))
+                    except ConnectionError:
+                        LOGGER.exception(
+                            'a connection error when checking live url '
+                            'workspace')
+                        raise
+                    watershed_fid_url_list.append(
+                        (watershed_basename, watershed_fid, workspace_url))
+                except Exception as e:
+                    response = requests.post(
+                        callback_url, json={'error': str(e)})
+                    raise
+            data_payload = {
+                'watershed_fid_url_list': watershed_fid_url_list,
+                'total_time_per_area': (time.time()-start_time) / total_area
+            }
+            LOGGER.debug(
+                'about to callback to this url: %s', callback_url)
+
+            response = requests.post(callback_url, json=data_payload)
+            if not response.ok:
+                raise RuntimeError(
+                    'something bad happened when scheduling worker: %s',
+                    str(response))
+            with GLOBAL_LOCK:
+                JOB_STATUS[session_id] = 'COMPLETE'
         except Exception as e:
             LOGGER.exception('something bad happened')
             with GLOBAL_LOCK:

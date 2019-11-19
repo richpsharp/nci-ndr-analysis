@@ -17,7 +17,8 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.FileHandler('%s_log.txt' % __name__))
-
+WGS84_CELL_SIZE = (0.008333, -0.008333)
+GLOBAL_NODATA_VAL = -1
 
 def make_empty_wgs84_raster(
         cell_size, nodata_value, target_datatype, target_raster_path,
@@ -70,5 +71,28 @@ def make_empty_wgs84_raster(
         with open(target_token_complete_path, 'w') as target_token_file:
             target_token_file.write('complete!')
 
+
 if __name__ == '__main__':
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
+    raster_path_base_list = [
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/n_export.tif',
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/intermediate_outputs/modified_load_n.tif',
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/intermediate_outputs/stream.tif',
+        ]
+    for raster_path_pattern in raster_path_base_list:
+        global_raster_path = os.path.join(WORKSPACE_DIR, os.path.basename(
+            raster_path_pattern))
+        target_token_complete_path = '%s.INITALIZED' % os.path.splitext(
+            global_raster_path)[0]
+        task_graph.add_task(
+            func=make_empty_wgs84_raster,
+            args=(
+                WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
+                global_raster_path, target_token_complete_path),
+            target_path_list=[target_token_complete_path],
+            task_name='make empty %s' % os.path.basename(raster_path_pattern))
+
+
+
+    task_graph.join()
+    task_graph.close()
