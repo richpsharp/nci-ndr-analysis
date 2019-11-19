@@ -446,6 +446,7 @@ def send_job(watershed_fid_tuple_list, total_area):
 
         LOGGER.debug('payload: %s', data_payload)
         worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+        LOGGER.debug('got this worker: %s', worker_ip_port)
         worker_rest_url = (
             'http://%s/api/v1/run_ndr' % worker_ip_port)
         LOGGER.debug(
