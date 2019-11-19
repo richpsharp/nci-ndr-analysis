@@ -118,7 +118,7 @@ class WorkerStateSet(object):
 GLOBAL_WORKER_STATE_SET = WorkerStateSet()
 
 
-def main(external_ip):
+def initialize():
     """Entry point."""
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
         try:
@@ -174,11 +174,6 @@ def main(external_ip):
 
     task_graph.join()
     task_graph.close()
-
-    schedule_worker_thread = threading.Thread(
-        target=schedule_worker,
-        args=(external_ip,))
-    schedule_worker_thread.start()
 
 
 def unzip_file(zip_path, target_directory, token_file):
@@ -339,6 +334,7 @@ def processing_complete():
         status_url = SCHEDULED_MAP[(watershed_basename, fid)]['status_url']
         # re-register the worker/port
         GLOBAL_WORKER_STATE_SET.set_ready_host(payload['worker_ip_port'])
+        del SCHEDULED_MAP[(watershed_basename, fid)]
     response = requests.get(status_url)
     LOGGER.debug(
         'updating %s:%d complete, status: %s', watershed_basename, fid,
@@ -346,52 +342,43 @@ def processing_complete():
     return '%s:%d complete' % (watershed_basename, fid), 202
 
 
-def insert_result_worker():
+def job_monitor():
     """Monitor result queue and add to database as needed."""
     while True:
         try:
-            connection = None
-            cursor = None
+            connection = sqlite3.connect(STATUS_DATABASE_PATH)
+            cursor = connection.cursor()
+        except Exception:
+            LOGGER.exception('error on connection')
+            time.sleep(0.1)
+    while True:
+        try:
             LOGGER.debug('waiting for result')
             payload = RESULT_QUEUE.get()
             workspace_url, watershed_basename, fid = payload
             while True:
+                cursor.execute(
+                    'UPDATE job_status '
+                    'SET workspace_url=?, job_status=\'DEBUG\' '
+                    'WHERE watershed_basename=? AND fid=?',
+                    (workspace_url, watershed_basename, fid))
+                LOGGER.debug('%s:%d inserted', watershed_basename, fid)
                 try:
-                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                    cursor = connection.cursor()
-                except Exception:
-                    LOGGER.exception('error on connection')
-                    time.sleep(0.1)
-                    continue
-                while True:
-                    cursor.execute(
-                        'UPDATE job_status '
-                        'SET workspace_url=?, job_status=\'DEBUG\' '
-                        'WHERE watershed_basename=? AND fid=?',
-                        (workspace_url, watershed_basename, fid))
-                    LOGGER.debug('%s:%d inserted', watershed_basename, fid)
-                    try:
-                        payload = RESULT_QUEUE.get()
-                        workspace_url, watershed_basename, fid = payload
-                    except queue.Empty:
-                        break
-                break
-            cursor.close()
+                    payload = RESULT_QUEUE.get()
+                    workspace_url, watershed_basename, fid = payload
+                except queue.Empty:
+                    break
             connection.commit()
         except Exception:
             LOGGER.exception('unhandled exception')
-            if connection:
-                connection.commit()
-            if cursor:
-                cursor.close()
+        finally:
+            connection.commit()
+            cursor.close()
 
 
 @retrying.retry()
-def schedule_worker(external_ip):
+def schedule_worker():
     """Monitors STATUS_DATABASE_PATH and schedules work.
-
-    Parameters:
-        external_ip (str): IP address used as a base to define build urls.
 
     Returns:
         None.
@@ -410,56 +397,51 @@ def schedule_worker(external_ip):
             'WHERE job_status=\'PRESCHEDULED\'')
         for payload in cursor.fetchall():
             watershed_basename, fid = payload
-            LOGGER.debug('scheduling %s %d', watershed_basename, fid)
-            with GLOBAL_LOCK:
-                if (watershed_basename, fid) in SCHEDULED_MAP:
-                    LOGGER.warning(
-                        '%s already in schedule', (watershed_basename, fid))
-
-            with APP.app_context():
-                callback_url = flask.url_for(
-                    'processing_complete', _external=True)
-
-            data_payload = {
-                'watershed_basename': watershed_basename,
-                'fid': fid,
-                'bucket_id': 'NOBUCKET',
-                'callback_url': callback_url,
-            }
-
-            # send job
-            while True:
-                try:
-                    LOGGER.debug('payload: %s', data_payload)
-                    worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
-                    worker_rest_url = (
-                        'http://%s/api/v1/run_ndr' % worker_ip_port)
-                    LOGGER.debug(
-                        'sending job %s to %s', data_payload, worker_rest_url)
-                    response = requests.post(
-                        worker_rest_url, json=data_payload)
-                    if response.ok:
-                        with GLOBAL_LOCK:
-                            SCHEDULED_MAP[(watershed_basename, fid)] = {
-                                'status_url': response.json()['status_url'],
-                                'worker_ip_port': worker_ip_port,
-                            }
-                        break
-                    else:
-                        raise RuntimeError(str(response))
-                except Exception:
-                    LOGGER.exception(
-                        'something bad happened, removing %s', worker_ip_port)
-                    GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
+            send_job(watershed_basename, fid)
+        cursor.close()
+        connection.commit()
+    except Exception:
+        LOGGER.exception('exception in scheduler')
         cursor.close()
         connection.commit()
 
+
+@retrying.retry()
+def send_job(watershed_basename, fid):
+    """Send watershed/fid to the global execution pool."""
+    try:
+        LOGGER.debug('scheduling %s %d', watershed_basename, fid)
+        with APP.app_context():
+            callback_url = flask.url_for(
+                'processing_complete', _external=True)
+        data_payload = {
+            'watershed_basename': watershed_basename,
+            'fid': fid,
+            'bucket_id': 'NOBUCKET',
+            'callback_url': callback_url,
+        }
+
+        LOGGER.debug('payload: %s', data_payload)
+        worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+        worker_rest_url = (
+            'http://%s/api/v1/run_ndr' % worker_ip_port)
+        LOGGER.debug(
+            'sending job %s to %s', data_payload, worker_rest_url)
+        response = requests.post(
+            worker_rest_url, json=data_payload)
+        if response.ok:
+            with GLOBAL_LOCK:
+                SCHEDULED_MAP[(watershed_basename, fid)] = {
+                    'status_url': response.json()['status_url'],
+                    'worker_ip_port': worker_ip_port,
+                    'last_time_accessed': time.time(),
+                }
+        else:
+            raise RuntimeError(str(response))
     except Exception:
-        LOGGER.exception('exception in scheduler')
-        if cursor:
-            cursor.close()
-        if connection:
-            connection.commit()
+        LOGGER.exception(
+            'something bad happened, on %s for %s:%s',
+            worker_ip_port, watershed_basename, fid)
         raise
 
 
@@ -492,6 +474,32 @@ def host_file_monitor():
             LOGGER.exception('exception in `host_file_monitor`')
 
 
+def worker_status_monitor():
+    """Monitor the status of watershed workers and reschedule if down."""
+    while True:
+        time.sleep(10)
+        current_time = time.time()
+        failed_job_list = []
+        with GLOBAL_LOCK:
+            for watershed_fid_tuple, value in SCHEDULED_MAP.items():
+                if current_time - value['last_time_accessed']:
+                    response = requests.get(value['status_url'])
+                    if response.ok:
+                        value['last_time_accessed'] = time.time()
+                    else:
+                        failed_job_list.put(watershed_fid_tuple)
+                    # it failed so we should remove it from the potential
+                    # host list because we don't know why. If it's still up
+                    # it will be added back by another worker
+                    GLOBAL_WORKER_STATE_SET.remove_host(
+                        value['worker_ip_port'])
+        for watershed_fid_tuple in failed_job_list:
+            LOGGER.debug('rescheduling %s', str(watershed_fid_tuple))
+            with GLOBAL_LOCK:
+                del SCHEDULED_MAP[watershed_fid_tuple]
+            send_job(*watershed_fid_tuple)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
@@ -501,14 +509,24 @@ if __name__ == '__main__':
         '--external_ip', type=str, default='localhost',
         help='define external IP that can be used to connect to this app')
     args = parser.parse_args()
-    main(args.external_ip)
+
+    initialize()
+
+    worker_status_monitor_thread = threading.Thread(
+        target=worker_status_monitor)
+    worker_status_monitor_thread.start()
+
+    schedule_worker_thread = threading.Thread(
+        target=schedule_worker)
+    schedule_worker_thread.start()
+
     host_file_monitor_thread = threading.Thread(
         target=host_file_monitor)
     host_file_monitor_thread.start()
 
-    insert_result_woker = threading.Thread(
-        target=insert_result_worker)
-    insert_result_worker.start()
+    job_monitor_thread = threading.Thread(
+        target=job_monitor)
+    job_monitor_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(

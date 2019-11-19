@@ -193,6 +193,8 @@ def get_status(session_id):
     try:
         with GLOBAL_LOCK:
             status = JOB_STATUS[session_id]
+            if status == 'ERROR':
+                raise RuntimeError(status)
             return status, 200
     except Exception as e:
         return str(e), 500
