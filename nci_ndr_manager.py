@@ -460,6 +460,8 @@ def host_file_monitor():
             for reservation in out_json['Reservations']:
                 for instance in reservation['Instances']:
                     try:
+                        if 'Tags' not in instance:
+                            continue
                         for tag in instance['Tags']:
                             if tag['Value'] == WORKER_TAG_ID and (
                                     instance['State']['Name'] == (
