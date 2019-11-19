@@ -467,6 +467,7 @@ def send_job(watershed_fid_tuple_list, total_area):
         LOGGER.exception(
             'something bad happened, on %s for %s',
             worker_ip_port, watershed_fid_tuple_list)
+        GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         raise
 
 
