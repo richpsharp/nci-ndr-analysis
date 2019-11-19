@@ -80,6 +80,7 @@ class WorkerStateSet(object):
                 if host in internal_set:
                     return False
             self.ready_host_set.add(host)
+            LOGGER.debug('just added %s so setting the flag')
             self.host_ready_event.set()
             return True
 
@@ -93,6 +94,7 @@ class WorkerStateSet(object):
                 self.ready_host_set.remove(ready_host)
                 self.running_host_set.add(ready_host)
                 if not self.ready_host_set:
+                    LOGGER.debug('no more ready hosts, clear the flag')
                     self.host_ready_event.clear()
                 return ready_host
 
