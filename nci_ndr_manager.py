@@ -332,7 +332,8 @@ def processing_complete():
     watershed_fid_url_list = payload['watershed_fid_url_list']
     time_per_area = payload['time_per_area']
     global TIME_PER_AREA
-    TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
+    with GLOBAL_LOCK:
+        TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
     for watershed_basename, fid, workspace_url in watershed_fid_url_list:
         RESULT_QUEUE.put((workspace_url, watershed_basename, fid))
         with GLOBAL_LOCK:
@@ -409,7 +410,12 @@ def schedule_worker():
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
             total_area += watershed_area_deg
+            LOGGER.debug(
+                'total total_expected_runtime: %s', total_expected_runtime)
             if total_expected_runtime > TIME_PER_WORKER:
+                LOGGER.debug(
+                    'sending job with %d elements',
+                    len(watershed_fid_tuple_list))
                 send_job(watershed_fid_tuple_list, total_area)
                 watershed_fid_tuple_list = []
                 total_expected_runtime = 0.0
