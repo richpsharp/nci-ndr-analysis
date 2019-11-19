@@ -155,8 +155,6 @@ def run_ndr():
             workers will have the same relative path.
         fid (int): this is the FID in the `watershed_path` vector that
             corresponds to the watershed to process.
-        bucket_id (str): when the model run is complete, the workspace will
-            zip itself up and push its contents to this Google Bucket ID.
         callback_url (str): this is the url to use to POST to when the
             watershed is complete. The body of the post will contain the
             url to the bucket OR the traceback of the exception that
@@ -172,7 +170,6 @@ def run_ndr():
         payload = flask.request.get_json()
         LOGGER.debug('got post: %s', str(payload))
         watershed_fid_tuple_list = payload['watershed_fid_tuple_list']
-        bucket_id = payload['bucket_id']
         callback_url = payload['callback_url']
         session_id = str(uuid.uuid4())
         status_url = flask.url_for(
@@ -180,7 +177,7 @@ def run_ndr():
         with GLOBAL_LOCK:
             JOB_STATUS[session_id] = 'SCHEDULED'
         WORK_QUEUE.put(
-            (watershed_fid_tuple_list, bucket_id, callback_url, session_id))
+            (watershed_fid_tuple_list, callback_url, session_id))
         return {'status_url': status_url}, 201
     except Exception as e:
         LOGGER.exception('an execption occured')
@@ -209,7 +206,7 @@ def ndr_worker(work_queue):
 
     Paramters:
         work_queue (queue): gets tuples of
-            (watershed_basename, watershed_fid, bucket_id, callback_url,
+            (watershed_basename, watershed_fid, callback_url,
              session_id)
     Returns:
         None.
@@ -220,7 +217,7 @@ def ndr_worker(work_queue):
     while True:
         try:
             payload = work_queue.get()
-            (watershed_fid_tuple_list, bucket_id, callback_url,
+            (watershed_fid_tuple_list, callback_url,
                 session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
@@ -229,6 +226,8 @@ def ndr_worker(work_queue):
             total_area = 0.0
             for watershed_basename, watershed_fid, watershed_area in (
                     watershed_fid_tuple_list):
+                LOGGER.debug(
+                    'running %s %d', watershed_basename, watershed_fid)
                 total_area += watershed_area
                 # create local workspace
                 ws_prefix = '%s_%d' % (watershed_basename, watershed_fid)

@@ -452,6 +452,7 @@ def send_job(watershed_fid_tuple_list, total_area):
             worker_rest_url, json=data_payload)
         if response.ok:
             with GLOBAL_LOCK:
+                LOGGER.debug('%s scheduled', watershed_fid_tuple_list)
                 for watershed_basename, fid, watershed_area_deg in (
                         watershed_fid_tuple_list):
                     SCHEDULED_MAP[(watershed_basename, fid)] = {
