@@ -89,11 +89,12 @@ class WorkerStateSet(object):
             # this blocks until there is something in the ready host set
             self.host_ready_event.wait()
             with self.lock:
-                if self.ready_host_set:
-                    ready_host = next(iter(self.ready_host_set))
-                    self.ready_host_set.remove(ready_host)
-                    self.running_host_set.add(ready_host)
-                    return ready_host
+                ready_host = next(iter(self.ready_host_set))
+                self.ready_host_set.remove(ready_host)
+                self.running_host_set.add(ready_host)
+                if not self.ready_host_set:
+                    self.host_ready_event.clear()
+                return ready_host
 
     def get_counts(self):
         with self.lock:
