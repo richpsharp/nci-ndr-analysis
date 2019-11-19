@@ -80,23 +80,23 @@ class WorkerStateSet(object):
                 if host in internal_set:
                     return False
             self.ready_host_set.add(host)
-            LOGGER.debug('just added %s so setting the flag')
+            LOGGER.debug('just added %s so setting the flag', host)
             self.host_ready_event.set()
             return True
 
     def get_ready_host(self):
         """Blocking call to fetch a ready host."""
-        while True:
-            # this blocks until there is something in the ready host set
-            self.host_ready_event.wait()
-            with self.lock:
-                ready_host = next(iter(self.ready_host_set))
-                self.ready_host_set.remove(ready_host)
-                self.running_host_set.add(ready_host)
-                if not self.ready_host_set:
-                    LOGGER.debug('no more ready hosts, clear the flag')
-                    self.host_ready_event.clear()
-                return ready_host
+        # this blocks until there is something in the ready host set
+        self.host_ready_event.wait()
+        with self.lock:
+            ready_host = next(iter(self.ready_host_set))
+            LOGGER.debug('this host is ready: %s', ready_host)
+            self.ready_host_set.remove(ready_host)
+            self.running_host_set.add(ready_host)
+            if not self.ready_host_set:
+                LOGGER.debug('no more ready hosts, clear the flag')
+                self.host_ready_event.clear()
+            return ready_host
 
     def get_counts(self):
         with self.lock:
