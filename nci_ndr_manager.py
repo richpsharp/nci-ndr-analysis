@@ -20,15 +20,17 @@ import threading
 import time
 import zipfile
 
-import flask
 from osgeo import gdal
-gdal.SetCacheMax(2**30)
+from osgeo import osr
+import flask
 import ecoshard
 import requests
 import retrying
 import shapely.strtree
 import shapely.wkb
 import taskgraph
+
+gdal.SetCacheMax(2**30)
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -52,13 +54,16 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.FileHandler('log.txt'))
 HOST_FILE_PATH = 'host_file.txt'
-DETECTOR_POLL_TIME = 60.0
+DETECTOR_POLL_TIME = 30.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
 GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
 GLOBAL_RUNNING_HOST_SET = set()  # hosts that are active
 GLOBAL_FAILED_HOST_SET = set()  # hosts that failed to connect or other error
 WORKER_TAG_ID = 'compute-server'
+BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
+GLOBAL_STITCH_PATHS = [
+]
 RESULT_QUEUE = queue.Queue()
 TIME_PER_AREA = 1e8
 TIME_PER_WORKER = 10 * 60
@@ -126,9 +131,12 @@ class WorkerStateSet(object):
             new_hosts = (
                 active_host_set - self.ready_host_set - self.running_host_set)
 
+            LOGGER.debug('update_host_set: new hosts: %s', new_hosts)
             # remove hosts that aren't in the active host set
             for working_host in [self.ready_host_set, self.running_host_set]:
-                working_host -= working_host - active_host_set
+                dead_hosts = working_host - active_host_set
+                LOGGER.debug('dead hosts: %s', dead_hosts)
+                working_host -= dead_hosts
 
             # add the active hosts to the ready host set
             self.ready_host_set |= new_hosts
@@ -472,7 +480,7 @@ def send_job(watershed_fid_tuple_list):
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
-            'bucket_uri_prefix': 's3://nci-ecoshards/watershed_workspaces'
+            'bucket_uri_prefix': BUCKET_URI_PREFIX,
         }
 
         LOGGER.debug('payload: %s', data_payload)
@@ -558,6 +566,58 @@ def worker_status_monitor():
             with GLOBAL_LOCK:
                 del SCHEDULED_MAP[watershed_fid_tuple_list]
             send_job(watershed_fid_tuple_list)
+
+
+def make_empty_wgs84_raster(
+        cell_size, nodata_value, target_datatype, target_raster_path,
+        target_token_complete_path):
+    """Make a big empty raster in WGS84 projection.
+
+    Parameters:
+        cell_size (float): this is the desired cell size in WSG84 degree
+            units.
+        nodata_value (float): desired nodata avlue of target raster
+        target_datatype (gdal enumerated type): desired target datatype.
+        target_raster_path (str): this is the target raster that will cover
+            [-180, 180), [90, -90) with cell size units with y direction being
+            negative.
+        target_token_complete_path (str): this file is created if the
+            mosaic to target is successful. Useful for taskgraph task
+            scheduling.
+
+    Returns:
+        None.
+
+    """
+    gtiff_driver = gdal.GetDriverByName('GTiff')
+    try:
+        os.makedirs(os.path.dirname(target_raster_path))
+    except OSError:
+        pass
+
+    n_cols = int(360.0 / cell_size)
+    n_rows = int(180.0 / cell_size)
+
+    geotransform = (-180.0, cell_size, 0.0, 90.0, 0, -cell_size)
+
+    target_raster = gtiff_driver.Create(
+        target_raster_path, n_cols, n_rows, 1, target_datatype,
+        options=(
+            'TILED=YES', 'BIGTIFF=YES', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+            'COMPRESS=LZW', 'SPARSE_OK=TRUE'))
+    wgs84_sr = osr.SpatialReference()
+    wgs84_sr.ImportFromEPSG(4326)
+    target_raster.SetProjection(wgs84_sr.ExportToWkt())
+    target_raster.SetGeoTransform(geotransform)
+    target_band = target_raster.GetRasterBand(1)
+    target_band.SetNoDataValue(nodata_value)
+    target_band = None
+    target_raster = None
+
+    target_raster = gdal.OpenEx(target_raster_path, gdal.OF_RASTER)
+    if target_raster:
+        with open(target_token_complete_path, 'w') as target_token_file:
+            target_token_file.write('complete!')
 
 
 if __name__ == '__main__':

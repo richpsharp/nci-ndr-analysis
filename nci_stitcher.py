@@ -17,8 +17,9 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.FileHandler('%s_log.txt' % __name__))
-WGS84_CELL_SIZE = (0.008333, -0.008333)
+WGS84_CELL_SIZE = (0.002, -0.002)
 GLOBAL_NODATA_VAL = -1
+
 
 def make_empty_wgs84_raster(
         cell_size, nodata_value, target_datatype, target_raster_path,
