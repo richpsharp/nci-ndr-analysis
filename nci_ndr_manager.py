@@ -815,7 +815,6 @@ def stitch_worker():
     while True:
         # update the stitch with the latest.
         try:
-            time.sleep(60)
             LOGGER.debug('searching for a new stitch')
             for raster_id, (path_prefix, gdal_type, nodata_value) in (
                     GLOBAL_STITCH_MAP.items()):
@@ -830,6 +829,7 @@ def stitch_worker():
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
+                LOGGER.debug('query string: %s', select_not_processed)
                 LOGGER.debug('result of update list: %s', update_ws_fid_list)
                 for watershed_basename, fid, workspace_url in (
                         update_ws_fid_list):
