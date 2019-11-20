@@ -360,6 +360,7 @@ def job_monitor():
         try:
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
             cursor = connection.cursor()
+            break
         except Exception:
             LOGGER.exception('error on connection')
             time.sleep(0.1)
