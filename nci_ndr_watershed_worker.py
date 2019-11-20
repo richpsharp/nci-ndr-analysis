@@ -542,7 +542,7 @@ if __name__ == '__main__':
     ndr_worker_thread.start()
 
     for _ in range(multiprocessing.cpu_count()):
-        ndr_single_worker_process = multiprocessing.Process(
+        ndr_single_worker_process = threading.Thread(
             target=ndr_single_worker, args=(
                 single_run_work_queue, error_queue))
         LOGGER.debug('starting single worker process')
