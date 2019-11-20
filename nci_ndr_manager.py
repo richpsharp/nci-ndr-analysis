@@ -369,18 +369,22 @@ def job_monitor():
             LOGGER.debug('waiting for result')
             payload = RESULT_QUEUE.get()
             workspace_url, watershed_basename, fid = payload
+            payload_list = [payload]
             while True:
-                cursor.execute(
-                    'UPDATE job_status '
-                    'SET workspace_url=?, job_status=\'DEBUG\' '
-                    'WHERE watershed_basename=? AND fid=?',
-                    (workspace_url, watershed_basename, fid))
-                LOGGER.debug('%s:%d inserted', watershed_basename, fid)
                 try:
-                    payload = RESULT_QUEUE.get()
+                    payload = RESULT_QUEUE.get(False)
                     workspace_url, watershed_basename, fid = payload
+                    payload_list.append(payload)
+                    if len(payload_list) > 100:
+                        break
                 except queue.Empty:
                     break
+            LOGGER.debug('%d inserted', len(payload_list))
+            cursor.executemany(
+                'UPDATE job_status '
+                'SET workspace_url=?, job_status=\'DEBUG\' '
+                'WHERE watershed_basename=? AND fid=?',
+                payload_list)
             connection.commit()
         except Exception:
             LOGGER.exception('unhandled exception')
@@ -417,12 +421,10 @@ def schedule_worker():
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
             total_area += watershed_area_deg
-            LOGGER.debug(
-                'total total_expected_runtime: %s', total_expected_runtime)
             if total_expected_runtime > TIME_PER_WORKER:
                 LOGGER.debug(
-                    'sending job with %d elements',
-                    len(watershed_fid_tuple_list))
+                    'sending job with %d elements %.2f min time',
+                    len(watershed_fid_tuple_list), total_expected_runtime/60)
                 send_job(watershed_fid_tuple_list, total_area)
                 watershed_fid_tuple_list = []
                 total_expected_runtime = 0.0
@@ -518,7 +520,11 @@ def worker_status_monitor():
         failed_job_list = []
         with GLOBAL_LOCK:
             total_area = 0.0
+            checked_hosts = set()
             for watershed_fid_tuple, value in SCHEDULED_MAP.items():
+                if value['status_url'] in checked_hosts:
+                    continue
+                checked_hosts.add(value['status_url'])
                 if current_time - value['last_time_accessed']:
                     response = requests.get(value['status_url'])
                     if response.ok:
