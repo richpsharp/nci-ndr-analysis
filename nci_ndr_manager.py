@@ -816,8 +816,13 @@ def stitch_worker():
                     'FROM job_status '
                     'WHERE stiched_%s = 0 AND '
                     'workspace_url IS NOT NULL' % raster_id)
-                update_ws_fid_list = execute_sql_on_database(
-                    select_not_processed, STATUS_DATABASE_PATH, query=True)
+                connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                cursor = connection.cursor()
+                cursor.execute(select_not_processed)
+                connection.commit()
+                connection.close()
+                cursor = None
+                update_ws_fid_list = list(cursor.fetchall())
                 LOGGER.debug('query string: %s', select_not_processed)
                 LOGGER.debug('result of update list: %s', update_ws_fid_list)
                 for watershed_basename, fid, workspace_url in (
