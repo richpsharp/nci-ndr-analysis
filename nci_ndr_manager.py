@@ -10,6 +10,7 @@ import argparse
 import datetime
 import json
 import logging
+import multiprocessing
 import os
 import pathlib
 import queue
@@ -708,13 +709,16 @@ def stitch_worker():
                 fid INT NOT NULL);
 
             CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-            ON job_status (watershed_basename, fid);
-
-            CREATE
-            ''')
+            ON %s_stitched_statuss (watershed_basename, fid);
+            ''') % (raster_id, raster_id)
         execute_sql_on_database(
             create_table_sql, STATUS_DATABASE_PATH, query=False)
     task_graph.join()
+
+    while True:
+        # update the stitch with the latest.
+        for raster_id in GLOBAL_STITCH_MAP:
+            execute_sql_on_database(sql_statement, database_path, query=False)
 
     # GLOBAL_STITCH_MAP = {
     #     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
@@ -759,6 +763,10 @@ if __name__ == '__main__':
     reschedule_worker_thread = threading.Thread(
         target=reschedule_worker)
     reschedule_worker_thread.start()
+
+    stitch_worker_process = multiprocessing.Process(
+        target=stitch_worker)
+    stitch_worker_process.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(

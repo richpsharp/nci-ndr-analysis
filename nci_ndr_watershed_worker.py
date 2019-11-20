@@ -95,7 +95,7 @@ def main():
             pass
 
     task_graph = taskgraph.TaskGraph(
-        WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
+        WORKSPACE_DIR, multiprocessing.cpu_count(), 60.0)
 
     # used to create dynamic paths
 
@@ -135,9 +135,9 @@ def main():
             dependent_task_list=[download_task_map[path_zip_key]],
             task_name='unzip %s' % path_zip_key)
 
-    # TODO: create DEM VRT
-
     task_graph.join()
+    task_graph.close()
+    del task_graph
 
 
 def unzip_file(zip_path, target_directory, token_file):
@@ -536,12 +536,15 @@ if __name__ == '__main__':
     ndr_worker_thread = threading.Thread(
         target=ndr_worker, args=(
             WORK_QUEUE, single_run_work_queue, error_queue))
+    LOGGER.debug('starting ndr worker')
     ndr_worker_thread.start()
 
     for _ in multiprocessing.cpu_count() * 4:
         ndr_single_worker_process = multiprocessing.Process(
             target=ndr_single_worker, args=(
                 single_run_work_queue, error_queue))
+        LOGGER.debug('starting single worker process')
         ndr_single_worker_process.start()
 
+    LOGGER.debug('starting app')
     APP.run(host='0.0.0.0', port=args.app_port)
