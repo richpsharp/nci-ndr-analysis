@@ -190,6 +190,23 @@ def unzip_file(zip_path, target_directory, token_file):
         token_file.write(str(datetime.datetime.now()))
 
 
+def create_index(database_path):
+    """Create an index on the database if it doesn't exist."""
+    create_index_sql = (
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
+        ON job_status (watershed_basename, fid);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS job_status_index
+        ON job_status (job_status);
+        """)
+    connection = sqlite3.connect(database_path)
+    cursor = connection.cursor()
+    cursor.executescript(create_index_sql)
+    cursor.close()
+    connection.commit()
+
+
 def create_status_database(
         database_path, watersheds_dir_path, country_borders_path,
         complete_token_path):
@@ -543,6 +560,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     initialize()
+    create_index(STATUS_DATABASE_PATH)
 
     worker_status_monitor_thread = threading.Thread(
         target=worker_status_monitor)
