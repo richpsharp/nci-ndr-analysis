@@ -829,6 +829,7 @@ def stitch_worker():
                         update_ws_fid_list[0:1]):
                     workspace_zip_path = os.path.join(
                         STITCH_DIR, os.path.basename(workspace_url))
+                    LOGGER.debug('download url: %s', workspace_url)
                     ecoshard.download_url(workspace_url, workspace_zip_path)
                     zipped_path = path_prefix.replace(
                         '[BASENAME]', watershed_basename).replace('[FID]', fid)
