@@ -419,11 +419,10 @@ def job_status_updater():
     while True:
         try:
             LOGGER.debug('waiting for result')
-            payload_list = RESULT_QUEUE.get()
-            workspace_first_list = [
-                (workspace_url, watershed_basename, fid)
-                for watershed_basename, fid, workspace_url in
-                payload_list]
+            watershed_fid_url_list = RESULT_QUEUE.get()
+            url_watershed_fid_list = [
+                (url, watershed, fid)
+                for watershed, fid, url in watershed_fid_url_list]
             while True:
                 try:
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
@@ -432,7 +431,7 @@ def job_status_updater():
                         'UPDATE job_status '
                         'SET workspace_url=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
-                        workspace_first_list)
+                        url_watershed_fid_list)
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
@@ -441,8 +440,8 @@ def job_status_updater():
                     connection.commit()
                     cursor.close()
                     connection.close()
-            LOGGER.debug('inserting this: %s', workspace_first_list)
-            LOGGER.debug('%d inserted', len(payload_list))
+            LOGGER.debug('inserting this: %s', url_watershed_fid_list)
+            LOGGER.debug('%d inserted', len(url_watershed_fid_list))
         except Exception:
             LOGGER.exception('unhandled exception')
 
@@ -731,7 +730,7 @@ def stitch_worker():
         # update the stitch with the latest.
         for raster_id in GLOBAL_STITCH_MAP:
             select_not_processed = (
-                'SELECT t_job.watershed_basename, t_job.fid '
+                'SELECT t_job.watershed_basename, t_job.fid, t_job.workspace_url '
                 'FROM job_status t_job '
                 'LEFT JOIN %s_stitched_status t_st '
                 'ON t_st.watershed_basename = t_job.watershed_basename '
@@ -739,7 +738,14 @@ def stitch_worker():
                 'WHERE t_st.fid IS NULL ' % raster_id)
             update_ws_fid_list = execute_sql_on_database(
                 select_not_processed, STATUS_DATABASE_PATH, query=True)
-            for watershed_basename, fid in update_ws_fid_list:
+            for watershed_basename, fid, workspace_url in update_ws_fid_list:
+                workspace_zip_path = os.path.join(
+                    STITCH_DIR, os.path.basename(workspace_url))
+                ecoshard.download_url(workspace_url, workspace_zip_path)
+                with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(workspace_url)
+                os.remove(workspace_zip_path)
+
                 LOGGER.debug(
                     'stitching %s %s in %s', watershed_basename, fid,
                     raster_id)

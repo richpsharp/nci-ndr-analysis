@@ -381,7 +381,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
                     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
                     'watershed_workspaces/', watershed_basename)
                 watershed_fid_url_list.append(
-                    (zipfile_url, watershed_basename, watershed_fid))
+                    (watershed_basename, watershed_fid, zipfile_url))
             single_run_joinable_queue.join()
             error_message = ''
             while True:
