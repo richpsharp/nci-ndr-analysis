@@ -280,6 +280,8 @@ def single_run_ndr(
                 os.path.join(dem_dir_path, '*.tif')),
             options=vrt_options)
 
+        wgs84_sr = osr.SpatialReference()
+        wgs84_sr.ImportFromEPSG(4326)
         target_bounding_box = pygeoprocessing.transform_bounding_box(
             watershed_bounding_box, wgs84_sr.ExportToWkt(),
             epsg_srs.ExportToWkt())
