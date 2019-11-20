@@ -70,7 +70,7 @@ TIME_PER_WORKER = 10 * 60
 
 WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
-GLOBAL_STITCH_WGS84_CELL_SIZE = (0.002, -0.002)
+GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
 GLOBAL_STITCH_MAP = {
     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
     'modified_load': (
