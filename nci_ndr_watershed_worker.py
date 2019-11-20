@@ -373,7 +373,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             for watershed_basename, watershed_fid, watershed_area in (
                     watershed_fid_tuple_list):
                 single_run_joinable_queue.put(
-                    watershed_basename, watershed_fid, bucket_uri_prefix)
+                    (watershed_basename, watershed_fid, bucket_uri_prefix))
                 total_area += watershed_area
             single_run_joinable_queue.join()
             error_message = ''
