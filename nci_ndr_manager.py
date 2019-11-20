@@ -391,7 +391,10 @@ def processing_status():
             hours, minutes, seconds)
         count_this_session = processed_count - START_COUNT
         processing_rate = count_this_session / uptime
-        approx_time_left = prescheduled_count / processing_rate
+        if processing_rate > 0:
+            approx_time_left = prescheduled_count / processing_rate
+        else:
+            approx_time_left = 999999999
         hours = approx_time_left // 3600
         minutes = (approx_time_left - hours*60) / 60
         seconds = approx_time_left % 60
@@ -439,8 +442,8 @@ def processing_complete():
         return 'complete', 202
     except Exception:
         LOGGER.exception(
-            'error on processing completed for host %s',
-            flask.request.remote_addr)
+            'error on processing completed for host %s. session_ids: %s',
+            flask.request.remote_addr, str(SCHEDULED_MAP))
 
 
 def job_status_updater():
