@@ -136,8 +136,8 @@ class WorkerStateSet(object):
         with self.lock:
             new_hosts = (
                 active_host_set - self.ready_host_set - self.running_host_set)
-
-            LOGGER.debug('update_host_set: new hosts: %s', new_hosts)
+            if new_hosts:
+                LOGGER.debug('update_host_set: new hosts: %s', new_hosts)
             # remove hosts that aren't in the active host set
             removed_hosts = set()
             for working_host in [self.ready_host_set, self.running_host_set]:
