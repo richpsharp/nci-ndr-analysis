@@ -51,6 +51,8 @@ STITCH_DIR = os.path.join(WORKSPACE_DIR, 'stitch_workspace')
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
+WATERSHED_STATS_DATABASE_PATH = os.path.join(
+    CHURN_DIR, 'watershed_stats.sqlite3')
 logging.basicConfig(
     level=logging.DEBUG,
     format=(
@@ -85,9 +87,6 @@ GLOBAL_STITCH_MAP = {
         'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/'
         'modified_load_n.tif',
         gdal.GDT_Float32, -1),
-    'stream': (
-        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
-        gdal.GDT_Byte, -1)
 }
 
 APP = flask.Flask(__name__)
@@ -292,7 +291,8 @@ def create_status_database(
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
             workspace_url TEXT,
-            stiched INT NOT NULL);
+            stiched_n_export INT NOT NULL,
+            stiched_modified_load INT NOT NULL);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -315,7 +315,8 @@ def create_status_database(
     insert_query = (
         'INSERT INTO job_status('
         'watershed_basename, fid, watershed_area_deg, job_status, '
-        'country_list, workspace_url, stiched) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        'country_list, workspace_url, stiched_n_export, stiched_modified_load) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
             watersheds_dir_path).rglob('*.shp')]:
@@ -347,7 +348,7 @@ def create_status_database(
             country_names = ','.join(country_name_list)
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
-                 country_names, None, 0))
+                 country_names, None, 0, 0))
             if (index+1) % 10000 == 0:
                 LOGGER.debug(
                     'every 10000 inserting %s watersheds into DB',
@@ -800,7 +801,7 @@ def stitch_worker():
                 task_name='make base %s' % raster_id)
         task_graph.join()
     except Exception:
-        LOGGER.exception('ERROR on stitched worker %s', traceback.format_exc())
+        LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
 
     while True:
         # update the stitch with the latest.
@@ -813,7 +814,7 @@ def stitch_worker():
                 select_not_processed = (
                     'SELECT watershed_basename, fid, workspace_url '
                     'FROM job_status '
-                    'WHERE stitched == 0 AND '
+                    'WHERE stiched_%s == 0 AND '
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
@@ -835,8 +836,9 @@ def stitch_worker():
                         raster_id)
                     local_path = os.path.join(local_zip_dir, zipped_path)
                     stitch_into(
-                        raster_id_path_map[raster_id], local_path, nodata_value)
-                    # DO THE STITCH HERE
+                        raster_id_path_map[raster_id], local_path,
+                        nodata_value)
+                    # get raster stats
                     os.remove(workspace_zip_path)
                     shutil.rmtree(local_zip_dir)
 
@@ -844,18 +846,18 @@ def stitch_worker():
                     try:
                         connection = sqlite3.connect(STATUS_DATABASE_PATH)
                         cursor = connection.cursor()
-                        update_stitched_record = (
+                        update_stiched_record = (
                             'UPDATE job_status '
-                            'SET stitched=1 '
-                            'WHERE watershed_basename=? AND fid=?')
+                            'SET stiched_%s=1 '
+                            'WHERE watershed_basename=? AND fid=?' % raster_id)
                         cursor.executemany(
-                             update_stitched_record,
+                             update_stiched_record,
                              [(basename, fid) for basename, fid, _ in
                               update_ws_fid_list])
                         break
                     except Exception:
                         LOGGER.exception(
-                            'exception when updating stitched status')
+                            'exception when updating stiched status')
                     finally:
                         connection.commit()
                         connection.close()
