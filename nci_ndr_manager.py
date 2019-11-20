@@ -438,7 +438,9 @@ def job_status_updater():
                     time.sleep(0.1)
                 finally:
                     connection.commit()
+                    cursor.close()
                     connection.close()
+            LOGGER.debug('inserting this: %s', workspace_first_list)
             LOGGER.debug('%d inserted', len(payload_list))
         except Exception:
             LOGGER.exception('unhandled exception')
