@@ -52,7 +52,7 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 LOGGER.addHandler(logging.FileHandler('log.txt'))
 HOST_FILE_PATH = 'host_file.txt'
-DETECTOR_POLL_TIME = 15.0
+DETECTOR_POLL_TIME = 60.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
 GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
@@ -119,6 +119,19 @@ class WorkerStateSet(object):
                 self.running_host_set.remove(host)
             self.ready_host_set.add(host)
             self.host_ready_event.set()
+
+    def update_host_set(self, active_host_set):
+        """Remove hosts not in `active_host_set` and add hosts that aren't present."""
+        with self.lock:
+            new_hosts = (
+                active_host_set - self.ready_host_set - self.running_host_set)
+
+            # remove hosts that aren't in the active host set
+            for working_host in [self.ready_host_set, self.running_host_set]:
+                working_host -= working_host - active_host_set
+
+            # add the active hosts to the ready host set
+            self.ready_host_set |= new_hosts
 
 
 GLOBAL_WORKER_STATE_SET = WorkerStateSet()
@@ -488,7 +501,7 @@ def send_job(watershed_fid_tuple_list):
         raise
 
 
-def host_file_monitor():
+def new_host_monitor():
     """Watch for AWS worker instances on the network.
 
     Returns:
@@ -500,6 +513,7 @@ def host_file_monitor():
             raw_output = subprocess.check_output(
                 'aws2 ec2 describe-instances', shell=True)
             out_json = json.loads(raw_output)
+            working_host_set = set()
             for reservation in out_json['Reservations']:
                 for instance in reservation['Instances']:
                     try:
@@ -509,14 +523,15 @@ def host_file_monitor():
                             if tag['Value'] == WORKER_TAG_ID and (
                                     instance['State']['Name'] == (
                                         'running')):
-                                GLOBAL_WORKER_STATE_SET.add_host(
+                                working_host_set.add(
                                     '%s:8888' % instance['PrivateIpAddress'])
                                 break
                     except Exception:
                         LOGGER.exception('something bad happened')
+            GLOBAL_WORKER_STATE_SET.update_host_set(working_host_set)
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
-            LOGGER.exception('exception in `host_file_monitor`')
+            LOGGER.exception('exception in `new_host_monitor`')
 
 
 def worker_status_monitor():
@@ -565,9 +580,9 @@ if __name__ == '__main__':
         target=schedule_worker)
     schedule_worker_thread.start()
 
-    host_file_monitor_thread = threading.Thread(
-        target=host_file_monitor)
-    host_file_monitor_thread.start()
+    new_host_monitor_thread = threading.Thread(
+        target=new_host_monitor)
+    new_host_monitor_thread.start()
 
     job_status_updater_thread = threading.Thread(
         target=job_status_updater)
