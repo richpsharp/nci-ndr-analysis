@@ -10,6 +10,7 @@ import datetime
 import glob
 import logging
 import os
+import multiprocessing
 import queue
 import shutil
 import subprocess
@@ -93,7 +94,8 @@ def main():
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, 0)
+    task_graph = taskgraph.TaskGraph(
+        WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
 
     # used to create dynamic paths
 
