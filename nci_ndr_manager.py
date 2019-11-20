@@ -383,11 +383,8 @@ def processing_status():
         uptime_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
         count_this_session = processed_count - START_COUNT
-        if count_this_session != 0:
-            processing_rate = seconds / count_this_session
-        else:
-            processing_rate = math.inf
-        approx_time_left = processing_rate * prescheduled_count
+        processing_rate = count_this_session / uptime
+        approx_time_left = prescheduled_count / processing_rate
         hours = approx_time_left // 3600
         minutes = (approx_time_left - hours*60) / 60
         seconds = approx_time_left % 60
@@ -395,7 +392,7 @@ def processing_status():
             hours, minutes, seconds)
         result_string = (
             'uptime: %s<br>'
-            'processing 1 watershed every %.2f seconds<br>'
+            'processing %.2f watersheds every second<br>'
             'approx_time_left: %s<br>'
             'total to process: %s<br>'
             'percent complete: %.2f%% (%s)<br>'
