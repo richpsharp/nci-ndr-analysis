@@ -127,15 +127,22 @@ class WorkerStateSet(object):
             self.host_ready_event.set()
 
     def update_host_set(self, active_host_set):
-        """Remove hosts not in `active_host_set` and add hosts that aren't present."""
+        """Remove hosts not in `active_host_set`.
+
+            Returns:
+                set of removed hosts.
+
+        """
         with self.lock:
             new_hosts = (
                 active_host_set - self.ready_host_set - self.running_host_set)
 
             LOGGER.debug('update_host_set: new hosts: %s', new_hosts)
             # remove hosts that aren't in the active host set
+            removed_hosts = set()
             for working_host in [self.ready_host_set, self.running_host_set]:
                 dead_hosts = working_host - active_host_set
+                removed_hosts |= dead_hosts
                 LOGGER.debug('dead hosts: %s', dead_hosts)
                 working_host -= dead_hosts
 
@@ -143,6 +150,7 @@ class WorkerStateSet(object):
             self.ready_host_set |= new_hosts
             if self.ready_host_set:
                 self.host_ready_event.set()
+        return removed_hosts
 
 
 GLOBAL_WORKER_STATE_SET = WorkerStateSet()
