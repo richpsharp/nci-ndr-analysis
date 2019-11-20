@@ -341,16 +341,11 @@ def processing_complete():
     for watershed_basename, fid, workspace_url in watershed_fid_url_list:
         RESULT_QUEUE.put((workspace_url, watershed_basename, fid))
         with GLOBAL_LOCK:
-            status_url = SCHEDULED_MAP[(watershed_basename, fid)]['status_url']
             worker_ip_port = SCHEDULED_MAP[
                 (watershed_basename, fid)]['worker_ip_port']
             # re-register the worker/port
-            GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
             del SCHEDULED_MAP[(watershed_basename, fid)]
-        response = requests.get(status_url)
-        LOGGER.debug(
-            'updating %s:%d complete, status: %s', watershed_basename, fid,
-            response)
+    GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
     return '%s:%d complete' % (watershed_basename, fid), 202
 
 
@@ -519,10 +514,11 @@ def worker_status_monitor():
         with GLOBAL_LOCK:
             total_area = 0.0
             checked_hosts = set()
+            hosts_to_remove = set()
             for watershed_fid_tuple, value in SCHEDULED_MAP.items():
-                if value['status_url'] in checked_hosts:
+                if value['worker_ip_port'] in checked_hosts:
                     continue
-                checked_hosts.add(value['status_url'])
+                checked_hosts.add(value['worker_ip_port'])
                 if current_time - value['last_time_accessed']:
                     response = requests.get(value['status_url'])
                     if response.ok:
@@ -533,8 +529,9 @@ def worker_status_monitor():
                         # it failed so we should remove it from the potential
                         # host list because we don't know why. If it's still up
                         # it will be added back by another worker
-                        GLOBAL_WORKER_STATE_SET.remove_host(
-                            value['worker_ip_port'])
+                        hosts_to_remove.add(value['worker_ip_port'])
+            for host in hosts_to_remove:
+                GLOBAL_WORKER_STATE_SET.remove_host(host)
         for watershed_fid_tuple in failed_job_list:
             LOGGER.debug('rescheduling %s', str(watershed_fid_tuple))
             with GLOBAL_LOCK:
