@@ -812,7 +812,7 @@ def stitch_worker():
                 'SELECT watershed_basename, fid, workspace_url '
                 'FROM job_status '
                 'WHERE (stiched_n_export = 0 OR stiched_modified_load = 0) '
-                'AND workspace_url IS NOT NULL' % raster_id)
+                'AND workspace_url IS NOT NULL')
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
             cursor = connection.cursor()
             cursor.execute(select_not_processed)
