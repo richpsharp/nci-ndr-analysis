@@ -247,6 +247,7 @@ def create_index(database_path):
         cursor.executescript(create_index_sql)
         cursor.close()
         connection.commit()
+        connection.close()
     except Exception:
         LOGGER.exception('exceptionon create_index')
 
@@ -345,9 +346,9 @@ def create_status_database(
             LOGGER.debug('inserting %s watersheds into DB', watershed_basename)
             cursor.executemany(insert_query, job_status_list)
     LOGGER.debug('all done with watersheds')
-
-    cursor.close()
     connection.commit()
+    cursor.close()
+    connection.close()
 
     with open(complete_token_path, 'w') as token_file:
         token_file.write(str(datetime.datetime.now()))
@@ -432,6 +433,7 @@ def job_status_updater():
                         workspace_first_list)
                     connection.commit()
                     cursor.close()
+                    connection.close()
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
@@ -476,10 +478,12 @@ def schedule_worker():
                 total_expected_runtime = 0.0
         cursor.close()
         connection.commit()
+        connection.close()
     except Exception:
         LOGGER.exception('exception in scheduler')
         cursor.close()
         connection.commit()
+        connection.close()
 
 
 def reschedule_worker():
@@ -682,6 +686,7 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
             result = None
         cursor.close()
         connection.commit()
+        connection.close()
         return result
     except Exception:
         LOGGER.exception('exception on execute sql statement')
