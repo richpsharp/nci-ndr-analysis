@@ -472,6 +472,7 @@ def send_job(watershed_fid_tuple_list):
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
+            'bucket_uri_prefix': 's3://nci-ecoshards/watershed_workspaces'
         }
 
         LOGGER.debug('payload: %s', data_payload)

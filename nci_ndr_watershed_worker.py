@@ -172,15 +172,16 @@ def run_ndr():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('got post: %s', str(payload))
-        watershed_fid_tuple_list = payload['watershed_fid_tuple_list']
-        callback_url = payload['callback_url']
         session_id = str(uuid.uuid4())
         status_url = flask.url_for(
             'get_status', _external=True, session_id=session_id)
         with GLOBAL_LOCK:
             JOB_STATUS[session_id] = 'SCHEDULED'
         WORK_QUEUE.put(
-            (watershed_fid_tuple_list, callback_url, session_id))
+            (payload['watershed_fid_tuple_list'],
+             payload['callback_url'],
+             payload['bucket_uri_prefix'],
+             session_id,))
         return {'status_url': status_url}, 201
     except Exception:
         LOGGER.exception('an execption occured')
@@ -220,7 +221,8 @@ def ndr_worker(work_queue):
     while True:
         try:
             payload = work_queue.get()
-            (watershed_fid_tuple_list, callback_url, session_id) = payload
+            (watershed_fid_tuple_list, callback_url, bucket_uri_prefix,
+                session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
             watershed_fid_url_list = []
@@ -323,8 +325,8 @@ def ndr_worker(work_queue):
                         zipfile_path)
                     zipdir(args['workspace_dir'], zipfile_path)
                     zipfile_s3_uri = (
-                        "s3://nci-ecoshards/watershed_workspaces/%s" %
-                        os.path.basename(zipfile_path))
+                        "%s/%s" %
+                        (bucket_uri_prefix, os.path.basename(zipfile_path)))
                     subprocess.run(
                         ["/usr/local/bin/aws2 s3 cp %s %s" % (
                             zipfile_path, zipfile_s3_uri)], shell=True,
