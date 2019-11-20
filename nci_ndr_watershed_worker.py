@@ -181,6 +181,7 @@ def run_ndr():
             (payload['watershed_fid_tuple_list'],
              payload['callback_url'],
              payload['bucket_uri_prefix'],
+             payload['worker_ip_port'],
              session_id,))
         return {'status_url': status_url}, 201
     except Exception:
@@ -222,7 +223,7 @@ def ndr_worker(work_queue):
         try:
             payload = work_queue.get()
             (watershed_fid_tuple_list, callback_url, bucket_uri_prefix,
-                session_id) = payload
+                worker_ip_port, session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
             watershed_fid_url_list = []
@@ -357,6 +358,7 @@ def ndr_worker(work_queue):
             data_payload = {
                 'watershed_fid_url_list': watershed_fid_url_list,
                 'time_per_area': (time.time()-start_time) / total_area,
+                'worker_ip_port': worker_ip_port,
             }
             LOGGER.debug(
                 'about to callback to this url: %s', callback_url)

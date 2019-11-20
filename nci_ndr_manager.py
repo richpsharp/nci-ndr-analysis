@@ -373,18 +373,14 @@ def processing_complete():
         LOGGER.debug('this was the payload: %s', payload)
         watershed_fid_url_list = payload['watershed_fid_url_list']
         time_per_area = payload['time_per_area']
+        worker_ip_port = payload['worker_ip_port']
         global TIME_PER_AREA
         with GLOBAL_LOCK:
             TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
+            del SCHEDULED_MAP[worker_ip_port]
         RESULT_QUEUE.put(watershed_fid_url_list)
-        for watershed_basename, fid, workspace_url in watershed_fid_url_list:
-            with GLOBAL_LOCK:
-                worker_ip_port = SCHEDULED_MAP[
-                    (watershed_basename, fid)]['worker_ip_port']
-                # re-register the worker/port
-                del SCHEDULED_MAP[(watershed_basename, fid)]
         GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
-        return '%s:%d complete' % (watershed_basename, fid), 202
+        return 'complete', 202
     except Exception:
         LOGGER.exception(
             'error on processing completed for host %s',
@@ -479,14 +475,15 @@ def send_job(watershed_fid_tuple_list):
         with APP.app_context():
             callback_url = flask.url_for(
                 'processing_complete', _external=True)
+        worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
+            'worker_ip_port': worker_ip_port,
         }
 
         LOGGER.debug('payload: %s', data_payload)
-        worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
         LOGGER.debug('got this worker: %s', worker_ip_port)
         worker_rest_url = (
             'http://%s/api/v1/run_ndr' % worker_ip_port)
@@ -548,26 +545,29 @@ def new_host_monitor():
 def worker_status_monitor():
     """Monitor the status of watershed workers and reschedule if down."""
     while True:
-        time.sleep(30)
-        current_time = time.time()
-        failed_job_list = []
-        with GLOBAL_LOCK:
-            hosts_to_remove = set()
-            for host, value in SCHEDULED_MAP.items():
-                if current_time - value['last_time_accessed']:
-                    response = requests.get(value['status_url'])
-                    if response.ok:
-                        value['last_time_accessed'] = time.time()
-                    else:
-                        failed_job_list.put(value['watershed_fid_tuple_list'])
-                        hosts_to_remove.add(host)
-            for host in hosts_to_remove:
-                del GLOBAL_WORKER_STATE_SET[host]
-        for watershed_fid_tuple_list in failed_job_list:
-            LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
+        try:
+            time.sleep(DETECTOR_POLL_TIME)
+            current_time = time.time()
+            failed_job_list = []
             with GLOBAL_LOCK:
-                del SCHEDULED_MAP[watershed_fid_tuple_list]
-            send_job(watershed_fid_tuple_list)
+                hosts_to_remove = set()
+                for host, value in SCHEDULED_MAP.items():
+                    if current_time - value['last_time_accessed']:
+                        response = requests.get(value['status_url'])
+                        if response.ok:
+                            value['last_time_accessed'] = time.time()
+                        else:
+                            failed_job_list.put(
+                                value['watershed_fid_tuple_list'])
+                            hosts_to_remove.add(host)
+                for host in hosts_to_remove:
+                    del GLOBAL_WORKER_STATE_SET.remove_host(host)
+                    del SCHEDULED_MAP[host]
+            for watershed_fid_tuple_list in failed_job_list:
+                LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
+                send_job(watershed_fid_tuple_list)
+        except Exception:
+            LOGGER.exception('exception in worker status monitor')
 
 
 def make_empty_wgs84_raster(
