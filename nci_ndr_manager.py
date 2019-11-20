@@ -714,14 +714,12 @@ def stitch_worker():
                 task_name='make base %s' % raster_id)
 
             create_table_sql = (
-                '''
-                CREATE TABLE IF NOT EXISTS %s_stitched_status (
-                    watershed_basename TEXT NOT NULL,
-                    fid INT NOT NULL);
-
-                CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-                ON %s_stitched_status (watershed_basename, fid);
-                ''') % (raster_id, raster_id)
+                'CREATE TABLE IF NOT EXISTS %s_stitched_status ('
+                '    watershed_basename TEXT NOT NULL,'
+                '    fid INT NOT NULL); '
+                'CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index '
+                'ON %s_stitched_status (watershed_basename, fid);') % (
+                raster_id, raster_id)
 
             execute_sql_on_database(
                 create_table_sql, STATUS_DATABASE_PATH, query=False)
@@ -752,9 +750,8 @@ def stitch_worker():
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
                     cursor = connection.cursor()
                     update_stitched_record = (
-                        '''
-                        INSERT INTO %s_stitched_status(
-                            watershed_basename, fid) VALUES (?, ?))''' %
+                        'INSERT INTO %s_stitched_status('
+                        '    watershed_basename, fid) VALUES (?, ?))' %
                         raster_id)
                     # cursor.executemany(
                     #     update_stitched_record, update_ws_fid_list)
