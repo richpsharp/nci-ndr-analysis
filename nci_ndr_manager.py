@@ -246,10 +246,11 @@ def create_index(database_path):
         cursor = connection.cursor()
         cursor.executescript(create_index_sql)
         cursor.close()
-        connection.commit()
-        connection.close()
     except Exception:
         LOGGER.exception('exceptionon create_index')
+    finally:
+        connection.commit()
+        connection.close()
 
 
 def create_status_database(
@@ -368,6 +369,9 @@ def processing_status():
             'SELECT count(1) from job_status '
             'where job_status=\'PRESCHEDULED\'')
         prescheduled_count = int(cursor.fetchone()[0])
+        cursor.close()
+        connection.commit()
+        connection.close()
         processed_count = total_count - prescheduled_count
         active_count, ready_count = (
             GLOBAL_WORKER_STATE_SET.get_counts())
@@ -431,13 +435,14 @@ def job_status_updater():
                         'SET workspace_url=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
                         workspace_first_list)
-                    connection.commit()
                     cursor.close()
-                    connection.close()
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
                     time.sleep(0.1)
+                finally:
+                    connection.commit()
+                    connection.close()
             LOGGER.debug('%d inserted', len(payload_list))
         except Exception:
             LOGGER.exception('unhandled exception')
@@ -464,7 +469,11 @@ def schedule_worker():
             'WHERE job_status=\'PRESCHEDULED\'')
         watershed_fid_tuple_list = []
         total_expected_runtime = 0.0
-        for payload in cursor.fetchall():
+        payload_list = list(cursor.fetchall())
+        cursor.close()
+        connection.commit()
+        connection.close()
+        for payload in payload_list:
             watershed_basename, fid, watershed_area_deg = payload
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
             watershed_fid_tuple_list.append(
@@ -476,14 +485,8 @@ def schedule_worker():
                 send_job(watershed_fid_tuple_list)
                 watershed_fid_tuple_list = []
                 total_expected_runtime = 0.0
-        cursor.close()
-        connection.commit()
-        connection.close()
     except Exception:
         LOGGER.exception('exception in scheduler')
-        cursor.close()
-        connection.commit()
-        connection.close()
 
 
 def reschedule_worker():
@@ -685,12 +688,13 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
         else:
             result = None
         cursor.close()
-        connection.commit()
-        connection.close()
         return result
     except Exception:
         LOGGER.exception('exception on execute sql statement')
         raise
+    finally:
+        connection.commit()
+        connection.close()
 
 
 def stitch_worker():
@@ -718,7 +722,7 @@ def stitch_worker():
                 fid INT NOT NULL);
 
             CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-            ON %s_stitched_statuss (watershed_basename, fid);
+            ON %s_stitched_status (watershed_basename, fid);
             ''') % (raster_id, raster_id)
         execute_sql_on_database(
             create_table_sql, STATUS_DATABASE_PATH, query=False)
@@ -727,7 +731,19 @@ def stitch_worker():
     while True:
         # update the stitch with the latest.
         for raster_id in GLOBAL_STITCH_MAP:
-            execute_sql_on_database(sql_statement, database_path, query=False)
+            select_not_processed = (
+                '''
+                SELECT t_job.watershed_basename, t_job.fid
+                FROM job_status t_job
+                LEFT JOIN %s_stitched_status t_st
+                ON t_st.watershed_basename = t_job.watershed_basename
+                AND t_st.fid = t_job.fid
+                WHERE t_st.fid IS NULL
+                ''')
+            payload = execute_sql_on_database(
+                select_not_processed, STATUS_DATABASE_PATH, query=True)
+            for watershed_basename, fid in payload:
+                pass
 
     # GLOBAL_STITCH_MAP = {
     #     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
