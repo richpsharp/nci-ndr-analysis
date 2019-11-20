@@ -358,14 +358,6 @@ def job_monitor():
     """Monitor result queue and add to database as needed."""
     while True:
         try:
-            connection = sqlite3.connect(STATUS_DATABASE_PATH)
-            cursor = connection.cursor()
-            break
-        except Exception:
-            LOGGER.exception('error on connection')
-            time.sleep(0.1)
-    while True:
-        try:
             LOGGER.debug('waiting for result')
             payload = RESULT_QUEUE.get()
             workspace_url, watershed_basename, fid = payload
@@ -380,17 +372,23 @@ def job_monitor():
                 except queue.Empty:
                     break
             LOGGER.debug('%d inserted', len(payload_list))
-            cursor.executemany(
-                'UPDATE job_status '
-                'SET workspace_url=?, job_status=\'DEBUG\' '
-                'WHERE watershed_basename=? AND fid=?',
-                payload_list)
-            connection.commit()
+            while True:
+                try:
+                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                    cursor = connection.cursor()
+                    cursor.executemany(
+                        'UPDATE job_status '
+                        'SET workspace_url=?, job_status=\'DEBUG\' '
+                        'WHERE watershed_basename=? AND fid=?',
+                        payload_list)
+                    connection.commit()
+                    cursor.close()
+                    break
+                except Exception:
+                    LOGGER.exception('error on connection')
+                    time.sleep(0.1)
         except Exception:
             LOGGER.exception('unhandled exception')
-        finally:
-            connection.commit()
-            cursor.close()
 
 
 @retrying.retry()
