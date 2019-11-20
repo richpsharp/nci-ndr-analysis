@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import uuid
 import zipfile
 
@@ -179,9 +180,9 @@ def run_ndr():
         WORK_QUEUE.put(
             (watershed_fid_tuple_list, callback_url, session_id))
         return {'status_url': status_url}, 201
-    except Exception as e:
+    except Exception:
         LOGGER.exception('an execption occured')
-        return str(e), 500
+        return traceback.format_exc(), 500
 
 
 @APP.route('/api/v1/get_status/<session_id>', methods=['GET'])

@@ -345,25 +345,30 @@ def processing_complete():
         None.
 
     """
-    payload = flask.request.get_json()
-    LOGGER.debug('this was the payload: %s', payload)
-    watershed_fid_url_list = payload['watershed_fid_url_list']
-    time_per_area = payload['time_per_area']
-    global TIME_PER_AREA
-    with GLOBAL_LOCK:
-        TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
-    RESULT_QUEUE.put(watershed_fid_url_list)
-    for watershed_basename, fid, workspace_url in watershed_fid_url_list:
+    try:
+        payload = flask.request.get_json()
+        LOGGER.debug('this was the payload: %s', payload)
+        watershed_fid_url_list = payload['watershed_fid_url_list']
+        time_per_area = payload['time_per_area']
+        global TIME_PER_AREA
         with GLOBAL_LOCK:
-            worker_ip_port = SCHEDULED_MAP[
-                (watershed_basename, fid)]['worker_ip_port']
-            # re-register the worker/port
-            del SCHEDULED_MAP[(watershed_basename, fid)]
-    GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
-    return '%s:%d complete' % (watershed_basename, fid), 202
+            TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
+        RESULT_QUEUE.put(watershed_fid_url_list)
+        for watershed_basename, fid, workspace_url in watershed_fid_url_list:
+            with GLOBAL_LOCK:
+                worker_ip_port = SCHEDULED_MAP[
+                    (watershed_basename, fid)]['worker_ip_port']
+                # re-register the worker/port
+                del SCHEDULED_MAP[(watershed_basename, fid)]
+        GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
+        return '%s:%d complete' % (watershed_basename, fid), 202
+    except Exception:
+        LOGGER.exception(
+            'error on processing completed for host %s',
+            flask.request.remote_addr)
 
 
-def job_monitor():
+def job_status_updater():
     """Monitor result queue and add to database as needed."""
     while True:
         try:
@@ -414,21 +419,18 @@ def schedule_worker():
             'WHERE job_status=\'PRESCHEDULED\'')
         watershed_fid_tuple_list = []
         total_expected_runtime = 0.0
-        total_area = 0.0
         for payload in cursor.fetchall():
             watershed_basename, fid, watershed_area_deg = payload
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
-            total_area += watershed_area_deg
             if total_expected_runtime > TIME_PER_WORKER:
                 LOGGER.debug(
                     'sending job with %d elements %.2f min time',
                     len(watershed_fid_tuple_list), total_expected_runtime/60)
-                send_job(watershed_fid_tuple_list, total_area)
+                send_job(watershed_fid_tuple_list)
                 watershed_fid_tuple_list = []
                 total_expected_runtime = 0.0
-                total_area = 0.0
         cursor.close()
         connection.commit()
     except Exception:
@@ -438,8 +440,17 @@ def schedule_worker():
 
 
 @retrying.retry()
-def send_job(watershed_fid_tuple_list, total_area):
-    """Send watershed/fid to the global execution pool."""
+def send_job(watershed_fid_tuple_list):
+    """Send watershed/fid to the global execution pool.
+
+    Parameters:
+        watershed_fid_tuple_list (list): list of
+            (watershed_basename, fid, watershed_area)
+
+    Returns:
+        None.
+
+    """
     try:
         LOGGER.debug('scheduling %s', watershed_fid_tuple_list)
         with APP.app_context():
@@ -448,7 +459,6 @@ def send_job(watershed_fid_tuple_list, total_area):
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
-            'total_area': total_area,
         }
 
         LOGGER.debug('payload: %s', data_payload)
@@ -463,14 +473,11 @@ def send_job(watershed_fid_tuple_list, total_area):
         if response.ok:
             with GLOBAL_LOCK:
                 LOGGER.debug('%s scheduled', watershed_fid_tuple_list)
-                for watershed_basename, fid, watershed_area_deg in (
-                        watershed_fid_tuple_list):
-                    SCHEDULED_MAP[(watershed_basename, fid)] = {
-                        'status_url': response.json()['status_url'],
-                        'worker_ip_port': worker_ip_port,
-                        'last_time_accessed': time.time(),
-                        'total_area': watershed_area_deg
-                    }
+                SCHEDULED_MAP[worker_ip_port] = {
+                    'status_url': response.json()['status_url'],
+                    'watershed_fid_tuple_list': watershed_fid_tuple_list,
+                    'last_time_accessed': time.time(),
+                }
         else:
             raise RuntimeError(str(response))
     except Exception:
@@ -519,31 +526,22 @@ def worker_status_monitor():
         current_time = time.time()
         failed_job_list = []
         with GLOBAL_LOCK:
-            total_area = 0.0
-            checked_hosts = set()
             hosts_to_remove = set()
-            for watershed_fid_tuple, value in SCHEDULED_MAP.items():
-                if value['worker_ip_port'] in checked_hosts:
-                    continue
-                checked_hosts.add(value['worker_ip_port'])
+            for host, value in SCHEDULED_MAP.items():
                 if current_time - value['last_time_accessed']:
                     response = requests.get(value['status_url'])
                     if response.ok:
                         value['last_time_accessed'] = time.time()
                     else:
-                        failed_job_list.put(watershed_fid_tuple)
-                        total_area += value['total_area']
-                        # it failed so we should remove it from the potential
-                        # host list because we don't know why. If it's still up
-                        # it will be added back by another worker
-                        hosts_to_remove.add(value['worker_ip_port'])
+                        failed_job_list.put(value['watershed_fid_tuple_list'])
+                        hosts_to_remove.add(host)
             for host in hosts_to_remove:
-                GLOBAL_WORKER_STATE_SET.remove_host(host)
-        for watershed_fid_tuple in failed_job_list:
-            LOGGER.debug('rescheduling %s', str(watershed_fid_tuple))
+                del GLOBAL_WORKER_STATE_SET[host]
+        for watershed_fid_tuple_list in failed_job_list:
+            LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
             with GLOBAL_LOCK:
-                del SCHEDULED_MAP[watershed_fid_tuple]
-            send_job([watershed_fid_tuple], total_area)
+                del SCHEDULED_MAP[watershed_fid_tuple_list]
+            send_job(watershed_fid_tuple_list)
 
 
 if __name__ == '__main__':
@@ -571,9 +569,9 @@ if __name__ == '__main__':
         target=host_file_monitor)
     host_file_monitor_thread.start()
 
-    job_monitor_thread = threading.Thread(
-        target=job_monitor)
-    job_monitor_thread.start()
+    job_status_updater_thread = threading.Thread(
+        target=job_status_updater)
+    job_status_updater_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
