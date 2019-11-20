@@ -140,6 +140,8 @@ class WorkerStateSet(object):
 
             # add the active hosts to the ready host set
             self.ready_host_set |= new_hosts
+            if self.ready_host_set:
+                self.host_ready_event.set()
 
 
 GLOBAL_WORKER_STATE_SET = WorkerStateSet()
