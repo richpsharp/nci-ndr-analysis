@@ -10,6 +10,7 @@ import argparse
 import datetime
 import json
 import logging
+import math
 import multiprocessing
 import os
 import pathlib
@@ -382,7 +383,10 @@ def processing_status():
         uptime_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
         count_this_session = processed_count - START_COUNT
-        processing_rate = seconds / count_this_session
+        if count_this_session != 0:
+            processing_rate = seconds / count_this_session
+        else:
+            processing_rate = math.inf
         approx_time_left = processing_rate * prescheduled_count
         hours = approx_time_left // 3600
         minutes = (approx_time_left - hours*60) / 60
