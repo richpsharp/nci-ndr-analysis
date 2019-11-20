@@ -808,32 +808,32 @@ def stitch_worker():
         time.sleep(10)
         try:
             LOGGER.debug('searching for a new stitch')
-            for raster_id, (path_prefix, gdal_type, nodata_value) in (
-                    GLOBAL_STITCH_MAP.items()):
-                LOGGER.debug('processing raster %s', raster_id)
-                select_not_processed = (
-                    'SELECT watershed_basename, fid, workspace_url '
-                    'FROM job_status '
-                    'WHERE stiched_%s = 0 AND '
-                    'workspace_url IS NOT NULL' % raster_id)
-                connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                cursor = connection.cursor()
-                cursor.execute(select_not_processed)
-                update_ws_fid_list = list(cursor.fetchall())
-                connection.commit()
-                connection.close()
-                cursor = None
-                LOGGER.debug('query string: %s', select_not_processed)
-                LOGGER.debug('result of update list: %s', update_ws_fid_list)
-                for watershed_basename, fid, workspace_url in (
-                        update_ws_fid_list[0:1]):
-                    workspace_zip_path = os.path.join(
-                        STITCH_DIR, os.path.basename(workspace_url))
-                    # TODO: this is just a hack because there are // in some results
-                    workspace_url = workspace_url.replace('//', '/').replace(
-                        'https:/', 'https://')
-                    LOGGER.debug('download url: %s', workspace_url)
-                    ecoshard.download_url(workspace_url, workspace_zip_path)
+            select_not_processed = (
+                'SELECT watershed_basename, fid, workspace_url '
+                'FROM job_status '
+                'WHERE (stiched_n_export = 0 OR stiched_modified_load = 0) '
+                'AND workspace_url IS NOT NULL' % raster_id)
+            connection = sqlite3.connect(STATUS_DATABASE_PATH)
+            cursor = connection.cursor()
+            cursor.execute(select_not_processed)
+            update_ws_fid_list = list(cursor.fetchall())
+            connection.commit()
+            connection.close()
+            cursor = None
+            LOGGER.debug('query string: %s', select_not_processed)
+            LOGGER.debug('result of update list: %s', update_ws_fid_list)
+            for watershed_basename, fid, workspace_url in (
+                    update_ws_fid_list[0:1]):
+                workspace_zip_path = os.path.join(
+                    STITCH_DIR, os.path.basename(workspace_url))
+                # TODO: this is just a hack because there are // in some results
+                workspace_url = workspace_url.replace('//', '/').replace(
+                    'https:/', 'https://')
+                LOGGER.debug('download url: %s', workspace_url)
+                ecoshard.download_url(workspace_url, workspace_zip_path)
+                for raster_id, (path_prefix, gdal_type, nodata_value) in (
+                        GLOBAL_STITCH_MAP.items()):
+                    LOGGER.debug('processing raster %s', raster_id)
                     zipped_path = path_prefix.replace(
                         '[BASENAME]', watershed_basename).replace('[FID]', fid)
                     local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
@@ -848,8 +848,8 @@ def stitch_worker():
                         raster_id_path_map[raster_id], local_path,
                         nodata_value)
                     # get raster stats
-                    os.remove(workspace_zip_path)
-                    shutil.rmtree(local_zip_dir)
+                os.remove(workspace_zip_path)
+                shutil.rmtree(local_zip_dir)
 
                 while True:
                     try:
