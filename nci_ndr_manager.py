@@ -338,8 +338,8 @@ def processing_complete():
     global TIME_PER_AREA
     with GLOBAL_LOCK:
         TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
+    RESULT_QUEUE.put(watershed_fid_url_list)
     for watershed_basename, fid, workspace_url in watershed_fid_url_list:
-        RESULT_QUEUE.put((workspace_url, watershed_basename, fid))
         with GLOBAL_LOCK:
             worker_ip_port = SCHEDULED_MAP[
                 (watershed_basename, fid)]['worker_ip_port']
@@ -354,19 +354,11 @@ def job_monitor():
     while True:
         try:
             LOGGER.debug('waiting for result')
-            payload = RESULT_QUEUE.get()
-            workspace_url, watershed_basename, fid = payload
-            payload_list = [payload]
-            while True:
-                try:
-                    payload = RESULT_QUEUE.get(False)
-                    workspace_url, watershed_basename, fid = payload
-                    payload_list.append(payload)
-                    if len(payload_list) > 100:
-                        break
-                except queue.Empty:
-                    break
-            LOGGER.debug('%d inserted', len(payload_list))
+            payload_list = RESULT_QUEUE.get()
+            workspace_first_list = [
+                (workspace_url, watershed_basename, fid)
+                for watershed_basename, fid, workspace_url in
+                payload_list]
             while True:
                 try:
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
@@ -375,13 +367,14 @@ def job_monitor():
                         'UPDATE job_status '
                         'SET workspace_url=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
-                        payload_list)
+                        workspace_first_list)
                     connection.commit()
                     cursor.close()
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
                     time.sleep(0.1)
+            LOGGER.debug('%d inserted', len(payload_list))
         except Exception:
             LOGGER.exception('unhandled exception')
 
