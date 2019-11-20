@@ -14,6 +14,7 @@ import multiprocessing
 import os
 import pathlib
 import queue
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -72,12 +73,12 @@ WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
 GLOBAL_STITCH_MAP = {
-    'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
+    'n_export': ('workspace_worker/[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
     'modified_load': (
-        '[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
+        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
         gdal.GDT_Float32, -1),
     'stream': (
-        '[BASENAME]_[FID]/intermediate_outputs/stream.tif', gdal.GDT_Byte, -1)
+        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif', gdal.GDT_Byte, -1)
 }
 
 APP = flask.Flask(__name__)
@@ -373,12 +374,31 @@ def processing_status():
         processed_count = total_count - prescheduled_count
         active_count, ready_count = (
             GLOBAL_WORKER_STATE_SET.get_counts())
+
+        uptime = time.time() - START_TIME
+        hours = uptime // 3600
+        minutes = (uptime - hours*60) / 60
+        seconds = uptime % 60
+        uptime_str = '%dh:%.2dm:%2.ds' % (
+            hours, minutes, seconds)
+        count_this_session = processed_count - START_COUNT
+        processing_rate = seconds / count_this_session
+        approx_time_left = processing_rate * prescheduled_count
+        hours = approx_time_left // 3600
+        minutes = (approx_time_left - hours*60) / 60
+        seconds = approx_time_left % 60
+        approx_time_left_str = '%dh:%.2dm:%2.ds' % (
+            hours, minutes, seconds)
         result_string = (
+            'uptime: %s<br>'
+            'processing 1 watershed every %.2f seconds<br>'
+            'approx_time_left: %s<br>'
             'total to process: %s<br>'
             'percent complete: %.2f%% (%s)<br>'
             'active workers: %d<br>'
             'ready workers: %d<br>' % (
-                total_count, processed_count/total_count*100,
+                uptime_str, processing_rate, approx_time_left_str, total_count,
+                processed_count/total_count*100,
                 processed_count, active_count, ready_count))
         return result_string
     except Exception as e:
@@ -728,7 +748,10 @@ def stitch_worker():
 
     while True:
         # update the stitch with the latest.
-        for raster_id in GLOBAL_STITCH_MAP:
+        time.sleep(60)
+        LOGGER.debug('searching for a new stitch')
+        for raster_id, (path_prefix, gdal_type, nodata_value) in (
+                GLOBAL_STITCH_MAP.items()):
             select_not_processed = (
                 'SELECT t_job.watershed_basename, t_job.fid, t_job.workspace_url '
                 'FROM job_status t_job '
@@ -742,13 +765,20 @@ def stitch_worker():
                 workspace_zip_path = os.path.join(
                     STITCH_DIR, os.path.basename(workspace_url))
                 ecoshard.download_url(workspace_url, workspace_zip_path)
+                zipped_path = path_prefix.replace(
+                    '[BASENAME]', watershed_basename).replace('[FID]', fid)
+                local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
+                    watershed_basename, fid))
                 with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(workspace_url)
-                os.remove(workspace_zip_path)
-
+                    zip_ref.extract(zipped_path, local_zip_dir)
                 LOGGER.debug(
                     'stitching %s %s in %s', watershed_basename, fid,
                     raster_id)
+
+                # DO THE STITCH HERE
+                os.remove(workspace_zip_path)
+                shutil.rmtree(local_zip_dir)
+
             while True:
                 try:
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
@@ -813,6 +843,20 @@ if __name__ == '__main__':
     stitch_worker_process = threading.Thread(
         target=stitch_worker)
     stitch_worker_process.start()
+
+    START_TIME = time.time()
+    ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
+    connection = sqlite3.connect(ro_uri, uri=True)
+    cursor = connection.cursor()
+    LOGGER.debug('querying prescheduled')
+    cursor.execute('SELECT count(1) from job_status')
+    total_count = int(cursor.fetchone()[0])
+    cursor.execute(
+        'SELECT count(1) from job_status '
+        'where job_status=\'PRESCHEDULED\'')
+    START_COUNT = total_count - int(cursor.fetchone()[0])
+    connection.commit()
+    connection.close()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
