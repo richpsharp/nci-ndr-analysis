@@ -831,7 +831,7 @@ def stitch_worker():
                         STITCH_DIR, os.path.basename(workspace_url))
                     # TODO: this is just a hack because there are // in some results
                     workspace_url = workspace_url.replace('//', '/').replace(
-                        'http:/', 'http://')
+                        'https:/', 'https://')
                     LOGGER.debug('download url: %s', workspace_url)
                     ecoshard.download_url(workspace_url, workspace_zip_path)
                     zipped_path = path_prefix.replace(
