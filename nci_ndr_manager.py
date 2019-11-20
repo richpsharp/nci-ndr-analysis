@@ -27,6 +27,7 @@ from osgeo import gdal
 from osgeo import osr
 import flask
 import ecoshard
+import pygeoprocessing
 import requests
 import retrying
 import shapely.strtree
@@ -68,6 +69,9 @@ RESULT_QUEUE = queue.Queue()
 RESCHEDULE_QUEUE = queue.Queue()
 TIME_PER_AREA = 1e8
 TIME_PER_WORKER = 10 * 60
+WGS84_SR = osr.SpatialReference()
+WGS84_SR.ImportFromEPSG(4326)
+WGS84_WKT = WGS84_SR.ExportToWkt()
 
 WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
@@ -681,9 +685,7 @@ def make_empty_wgs84_raster(
         options=(
             'TILED=YES', 'BIGTIFF=YES', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
             'COMPRESS=LZW', 'SPARSE_OK=TRUE'))
-    wgs84_sr = osr.SpatialReference()
-    wgs84_sr.ImportFromEPSG(4326)
-    target_raster.SetProjection(wgs84_sr.ExportToWkt())
+    target_raster.SetProjection(WGS84_WKT)
     target_raster.SetGeoTransform(geotransform)
     target_band = target_raster.GetRasterBand(1)
     target_band.SetNoDataValue(nodata_value)
@@ -719,6 +721,22 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
     finally:
         connection.commit()
         connection.close()
+
+
+@retrying.retry()
+def stitch_into(master_raster_path, base_raster_path, nodata_value):
+    """Stitch `base`into `master` by only overwriting non-nodata values."""
+    try:
+        wgs84_base_raster_path = (
+            '%s_wgs84.%s' % os.path.splitext(base_raster_path))
+        pygeoprocessing.warp_raster(
+            base_raster_path,
+            (GLOBAL_STITCH_WGS84_CELL_SIZE, -GLOBAL_STITCH_WGS84_CELL_SIZE),
+            wgs84_base_raster_path, 'near', target_sr_wkt=WGS84_WKT)
+    except Exception:
+        LOGGER.exception('error on stitch into')
+    finally:
+        os.remove(wgs84_base_raster_path)
 
 
 def stitch_worker():
@@ -767,7 +785,7 @@ def stitch_worker():
                     'LEFT JOIN %s_stitched_status t_st '
                     'ON t_st.watershed_basename = t_job.watershed_basename '
                     'AND t_st.fid = t_job.fid '
-                    'WHERE t_st.fid IS NULL AND'
+                    'WHERE t_st.fid IS NULL AND '
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
@@ -784,7 +802,9 @@ def stitch_worker():
                     LOGGER.debug(
                         'stitching %s %s in %s', watershed_basename, fid,
                         raster_id)
-
+                    local_path = os.path.join(local_zip_dir, zipped_path)
+                    stitch_into(
+                        raster_id_path_map[raster_id], local_path, nodata_value)
                     # DO THE STITCH HERE
                     os.remove(workspace_zip_path)
                     shutil.rmtree(local_zip_dir)
