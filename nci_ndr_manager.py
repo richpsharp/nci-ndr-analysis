@@ -65,6 +65,7 @@ BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
 GLOBAL_STITCH_PATHS = [
 ]
 RESULT_QUEUE = queue.Queue()
+RESCHEDULE_QUEUE = queue.Queue()
 TIME_PER_AREA = 1e8
 TIME_PER_WORKER = 10 * 60
 
@@ -458,6 +459,17 @@ def schedule_worker():
         connection.commit()
 
 
+def reschedule_worker():
+    """Reschedule any jobs that come through the schedule queue."""
+    while True:
+        try:
+            watershed_fid_tuple_list = RESCHEDULE_QUEUE.get()
+            LOGGER.debug('rescheduling %s', watershed_fid_tuple_list)
+            send_job(watershed_fid_tuple_list)
+        except Exception:
+            LOGGER.exception('something bad happened in reschedule_worker')
+
+
 @retrying.retry()
 def send_job(watershed_fid_tuple_list):
     """Send watershed/fid to the global execution pool.
@@ -536,7 +548,14 @@ def new_host_monitor():
                                 break
                     except Exception:
                         LOGGER.exception('something bad happened')
-            GLOBAL_WORKER_STATE_SET.update_host_set(working_host_set)
+            dead_hosts = GLOBAL_WORKER_STATE_SET.update_host_set(
+                working_host_set)
+            with GLOBAL_LOCK:
+                for host in dead_hosts:
+                    watershed_fid_tuple_list = (
+                        SCHEDULED_MAP[host]['watershed_fid_tuple_list'])
+                    del SCHEDULED_MAP[host]
+                    RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `new_host_monitor`')
@@ -650,6 +669,10 @@ if __name__ == '__main__':
     job_status_updater_thread = threading.Thread(
         target=job_status_updater)
     job_status_updater_thread.start()
+
+    reschedule_worker_thread = threading.Thread(
+        target=reschedule_worker)
+    reschedule_worker_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
