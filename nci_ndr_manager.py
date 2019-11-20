@@ -291,7 +291,8 @@ def create_status_database(
             watershed_area_deg REAL NOT NULL,
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
-            workspace_url TEXT);
+            workspace_url TEXT,
+            stiched INT NOT NULL);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -314,7 +315,7 @@ def create_status_database(
     insert_query = (
         'INSERT INTO job_status('
         'watershed_basename, fid, watershed_area_deg, job_status, '
-        'country_list, workspace_url) VALUES (?, ?, ?, ?, ?, ?)')
+        'country_list, workspace_url, stiched) VALUES (?, ?, ?, ?, ?, ?, ?)')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
             watersheds_dir_path).rglob('*.shp')]:
@@ -346,7 +347,7 @@ def create_status_database(
             country_names = ','.join(country_name_list)
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
-                 country_names, None))
+                 country_names, None, 0))
             if (index+1) % 10000 == 0:
                 LOGGER.debug(
                     'every 10000 inserting %s watersheds into DB',
@@ -797,42 +798,29 @@ def stitch_worker():
                     stitch_raster_path, stitch_raster_token_path),
                 target_path_list=[stitch_raster_token_path],
                 task_name='make base %s' % raster_id)
-
-            create_table_sql = (
-                'CREATE TABLE IF NOT EXISTS %s_stitched_status ('
-                '    watershed_basename TEXT NOT NULL,'
-                '    fid INT NOT NULL); '
-                'CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index '
-                'ON %s_stitched_status (watershed_basename, fid);') % (
-                raster_id, raster_id)
-
-            execute_sql_on_database(
-                create_table_sql, STATUS_DATABASE_PATH, query=False)
         task_graph.join()
     except Exception:
         LOGGER.exception('ERROR on stitched worker %s', traceback.format_exc())
 
     while True:
         # update the stitch with the latest.
+        time.sleep(10)
         try:
             LOGGER.debug('searching for a new stitch')
             for raster_id, (path_prefix, gdal_type, nodata_value) in (
                     GLOBAL_STITCH_MAP.items()):
                 LOGGER.debug('processing raster %s', raster_id)
                 select_not_processed = (
-                    'SELECT t_job.watershed_basename, t_job.fid, workspace_url '
-                    'FROM job_status t_job '
-                    'LEFT OUTER JOIN %s_stitched_status t_st '
-                    'ON t_st.watershed_basename = t_job.watershed_basename '
-                    'AND t_st.fid = t_job.fid '
-                    'WHERE t_st.fid IS NULL AND '
+                    'SELECT watershed_basename, fid, workspace_url '
+                    'FROM job_status '
+                    'WHERE stitched == 0 AND '
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
                 LOGGER.debug('query string: %s', select_not_processed)
                 LOGGER.debug('result of update list: %s', update_ws_fid_list)
                 for watershed_basename, fid, workspace_url in (
-                        update_ws_fid_list):
+                        update_ws_fid_list[0:1]):
                     workspace_zip_path = os.path.join(
                         STITCH_DIR, os.path.basename(workspace_url))
                     ecoshard.download_url(workspace_url, workspace_zip_path)
@@ -857,14 +845,17 @@ def stitch_worker():
                         connection = sqlite3.connect(STATUS_DATABASE_PATH)
                         cursor = connection.cursor()
                         update_stitched_record = (
-                            'INSERT INTO %s_stitched_status('
-                            '    watershed_basename, fid) VALUES (?, ?))' %
-                            raster_id)
-                        # cursor.executemany(
-                        #     update_stitched_record, update_ws_fid_list)
+                            'UPDATE job_status '
+                            'SET stitched=1 '
+                            'WHERE watershed_basename=? AND fid=?')
+                        cursor.executemany(
+                             update_stitched_record,
+                             [(basename, fid) for basename, fid, _ in
+                              update_ws_fid_list])
                         break
                     except Exception:
-                        LOGGER.exception('exception when updating stitched status')
+                        LOGGER.exception(
+                            'exception when updating stitched status')
                     finally:
                         connection.commit()
                         connection.close()
