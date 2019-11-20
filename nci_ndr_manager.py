@@ -746,9 +746,11 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
         master_raster = gdal.OpenEx(
             master_raster_path, gdal.OF_RASTER | gdal.GA_Update)
         master_band = master_raster.GetRasterBand(1)
-        master_raster_info = pygeoprocessing.get_raster_info(master_raster_path)
+        master_raster_info = pygeoprocessing.get_raster_info(
+            master_raster_path)
         master_nodata = master_raster_info['nodata'][0]
-        base_raster_info = pygeoprocessing.get_raster_info(base_raster_path)
+        base_raster_info = pygeoprocessing.get_raster_info(
+            wgs84_base_raster_path)
         master_gt = master_raster_info['geotransform']
         base_gt = base_raster_info['geotransform']
         base_nodata = base_raster_info['nodata']
@@ -757,7 +759,7 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
         target_y_off = int((base_gt[3] - master_gt[3]) / master_gt[5])
 
         for offset_dict, base_block in pygeoprocessing.iterblocks(
-                (base_raster_path, 1)):
+                (wgs84_base_raster_path, 1)):
             master_block = master_band.ReadAsArray(
                 xoff=offset_dict['xoff']+target_x_off,
                 yoff=offset_dict['yoff']+target_y_off,
