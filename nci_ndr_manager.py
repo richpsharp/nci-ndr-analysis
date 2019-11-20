@@ -592,7 +592,7 @@ def worker_status_monitor():
                     del SCHEDULED_MAP[host]
             for watershed_fid_tuple_list in failed_job_list:
                 LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
-                send_job(watershed_fid_tuple_list)
+                RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
         except Exception:
             LOGGER.exception('exception in worker status monitor')
 
