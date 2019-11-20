@@ -342,8 +342,10 @@ def processing_complete():
         RESULT_QUEUE.put((workspace_url, watershed_basename, fid))
         with GLOBAL_LOCK:
             status_url = SCHEDULED_MAP[(watershed_basename, fid)]['status_url']
+            worker_ip_port = SCHEDULED_MAP[
+                (watershed_basename, fid)]['worker_ip_port']
             # re-register the worker/port
-            GLOBAL_WORKER_STATE_SET.set_ready_host(payload['worker_ip_port'])
+            GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
             del SCHEDULED_MAP[(watershed_basename, fid)]
         response = requests.get(status_url)
         LOGGER.debug(

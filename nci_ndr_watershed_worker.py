@@ -217,8 +217,7 @@ def ndr_worker(work_queue):
     while True:
         try:
             payload = work_queue.get()
-            (watershed_fid_tuple_list, callback_url,
-                session_id) = payload
+            (watershed_fid_tuple_list, callback_url, session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
             watershed_fid_url_list = []
@@ -352,7 +351,7 @@ def ndr_worker(work_queue):
                     raise
             data_payload = {
                 'watershed_fid_url_list': watershed_fid_url_list,
-                'time_per_area': (time.time()-start_time) / total_area
+                'time_per_area': (time.time()-start_time) / total_area,
             }
             LOGGER.debug(
                 'about to callback to this url: %s', callback_url)
