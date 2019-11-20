@@ -42,6 +42,7 @@ COUNTRY_BORDERS_URL = (
     'world_borders_md5_c8dd971a8a853b2f3e1d3801b9747d5f.gpkg')
 
 WORKSPACE_DIR = 'workspace_manager'
+STITCH_DIR = os.path.join(WORKSPACE_DIR, 'stitch_workspace')
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
@@ -60,14 +61,22 @@ GLOBAL_LOCK = threading.Lock()
 GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
 GLOBAL_RUNNING_HOST_SET = set()  # hosts that are active
 GLOBAL_FAILED_HOST_SET = set()  # hosts that failed to connect or other error
-WORKER_TAG_ID = 'compute-server'
-BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
-GLOBAL_STITCH_PATHS = [
-]
 RESULT_QUEUE = queue.Queue()
 RESCHEDULE_QUEUE = queue.Queue()
 TIME_PER_AREA = 1e8
 TIME_PER_WORKER = 10 * 60
+
+WORKER_TAG_ID = 'compute-server'
+BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
+GLOBAL_STITCH_WGS84_CELL_SIZE = (0.002, -0.002)
+GLOBAL_STITCH_MAP = {
+    'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
+    'modified_load': (
+        '[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
+        gdal.GDT_Float32, -1),
+    'stream': (
+        '[BASENAME]_[FID]/intermediate_outputs/stream.tif', gdal.GDT_Byte, -1)
+}
 
 APP = flask.Flask(__name__)
 
@@ -648,6 +657,74 @@ def make_empty_wgs84_raster(
     if target_raster:
         with open(target_token_complete_path, 'w') as target_token_file:
             target_token_file.write('complete!')
+
+
+@retrying.retry()
+def execute_sql_on_database(sql_statement, database_path, query=False):
+    """Execute sql_statement on given database path.
+
+    Returns:
+        if query, return a "fetchall" result of the query, else None.
+
+    """
+    try:
+        connection = sqlite3.connect(database_path)
+        cursor = connection.cursor()
+        cursor.executescript(sql_statement)
+        if query:
+            result = list(cursor.fetchall())
+        else:
+            result = None
+        cursor.close()
+        connection.commit()
+        return result
+    except Exception:
+        LOGGER.exception('exception on execute sql statement')
+        raise
+
+
+def stitch_worker():
+    """Mange the stitching of a raster."""
+    task_graph = taskgraph.TaskGraph(STITCH_DIR, 0)
+    raster_id_path_map = {}
+    for raster_id, (path_prefix, gdal_type, nodata_value) in (
+            GLOBAL_STITCH_MAP.items()):
+        stitch_raster_path = os.path.join(STITCH_DIR, '%s.tif' % raster_id)
+        raster_id_path_map[raster_id] = stitch_raster_path
+        stitch_raster_token_path = '%s.CREATED' % (
+            os.path.splitext(stitch_raster_path)[0])
+        task_graph.add_task(
+            func=make_empty_wgs84_raster,
+            args=(
+                GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
+                stitch_raster_path, stitch_raster_token_path),
+            target_path_list=[stitch_raster_token_path],
+            task_name='make base %s' % raster_id)
+
+        create_table_sql = (
+            '''
+            CREATE TABLE IF NOT EXISTS %s_stitched_status (
+                watershed_basename TEXT NOT NULL,
+                fid INT NOT NULL);
+
+            CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
+            ON job_status (watershed_basename, fid);
+
+            CREATE
+            ''')
+        execute_sql_on_database(
+            create_table_sql, STATUS_DATABASE_PATH, query=False)
+    task_graph.join()
+
+    # GLOBAL_STITCH_MAP = {
+    #     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
+    #     'modified_load': (
+    #         '[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
+    #         gdal.GDT_Float32, -1),
+    #     'stream': (
+    #         '[BASENAME]_[FID]/intermediate_outputs/stream.tif',
+    #         gdal.GDT_Byte, -1)
+    # }
 
 
 if __name__ == '__main__':
