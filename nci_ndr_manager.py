@@ -233,18 +233,22 @@ def unzip_file(zip_path, target_directory, token_file):
         token_file.write(str(datetime.datetime.now()))
 
 
+@retrying.retry()
 def create_index(database_path):
     """Create an index on the database if it doesn't exist."""
-    create_index_sql = (
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-        ON job_status (watershed_basename, fid);
-        """)
-    connection = sqlite3.connect(database_path)
-    cursor = connection.cursor()
-    cursor.executescript(create_index_sql)
-    cursor.close()
-    connection.commit()
+    try:
+        create_index_sql = (
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
+            ON job_status (watershed_basename, fid);
+            """)
+        connection = sqlite3.connect(database_path)
+        cursor = connection.cursor()
+        cursor.executescript(create_index_sql)
+        cursor.close()
+        connection.commit()
+    except Exception:
+        LOGGER.exception('exceptionon create_index')
 
 
 def create_status_database(
