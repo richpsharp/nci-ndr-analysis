@@ -35,7 +35,7 @@ import shapely.strtree
 import shapely.wkb
 import taskgraph
 
-gdal.SetCacheMax(2**30)
+gdal.SetCacheMax(2**29)
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'

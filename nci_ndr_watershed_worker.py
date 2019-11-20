@@ -22,6 +22,8 @@ import zipfile
 
 from osgeo import gdal
 # set a 1GB limit for the cache
+gdal.SetCacheMax(2**29)
+
 from osgeo import ogr
 from osgeo import osr
 import ecoshard
@@ -32,7 +34,6 @@ import pygeoprocessing
 import requests
 import retrying
 import taskgraph
-gdal.SetCacheMax(2**30)
 
 DEM_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
