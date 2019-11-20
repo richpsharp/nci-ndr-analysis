@@ -734,10 +734,29 @@ def stitch_worker():
                 AND t_st.fid = t_job.fid
                 WHERE t_st.fid IS NULL
                 ''')
-            payload = execute_sql_on_database(
+            update_ws_fid_list = execute_sql_on_database(
                 select_not_processed, STATUS_DATABASE_PATH, query=True)
-            for watershed_basename, fid in payload:
-                pass
+            for watershed_basename, fid in update_ws_fid_list:
+                LOGGER.debug(
+                    'stitching %s %s in %s', watershed_basename, fid,
+                    raster_id)
+            while True:
+                try:
+                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                    cursor = connection.cursor()
+                    update_stitched_record = (
+                        '''
+                        INSERT INTO %s_stitched_status(
+                            watershed_basename, fid) VALUES (?, ?))''' %
+                        raster_id)
+                    # cursor.executemany(
+                    #     update_stitched_record, update_ws_fid_list)
+                    break
+                except Exception:
+                    LOGGER.exception('exception when updating stitched status')
+                finally:
+                    connection.commit()
+                    connection.close()
 
     # GLOBAL_STITCH_MAP = {
     #     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
