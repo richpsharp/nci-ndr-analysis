@@ -245,7 +245,6 @@ def create_index(database_path):
         connection = sqlite3.connect(database_path)
         cursor = connection.cursor()
         cursor.executescript(create_index_sql)
-        cursor.close()
     except Exception:
         LOGGER.exception('exceptionon create_index')
     finally:
@@ -348,7 +347,6 @@ def create_status_database(
             cursor.executemany(insert_query, job_status_list)
     LOGGER.debug('all done with watersheds')
     connection.commit()
-    cursor.close()
     connection.close()
 
     with open(complete_token_path, 'w') as token_file:
@@ -369,7 +367,6 @@ def processing_status():
             'SELECT count(1) from job_status '
             'where job_status=\'PRESCHEDULED\'')
         prescheduled_count = int(cursor.fetchone()[0])
-        cursor.close()
         connection.commit()
         connection.close()
         processed_count = total_count - prescheduled_count
@@ -435,7 +432,6 @@ def job_status_updater():
                         'SET workspace_url=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
                         workspace_first_list)
-                    cursor.close()
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
@@ -470,7 +466,6 @@ def schedule_worker():
         watershed_fid_tuple_list = []
         total_expected_runtime = 0.0
         payload_list = list(cursor.fetchall())
-        cursor.close()
         connection.commit()
         connection.close()
         for payload in payload_list:
@@ -687,7 +682,6 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
             result = list(cursor.fetchall())
         else:
             result = None
-        cursor.close()
         return result
     except Exception:
         LOGGER.exception('exception on execute sql statement')
