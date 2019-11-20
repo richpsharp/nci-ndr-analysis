@@ -143,7 +143,8 @@ class WorkerStateSet(object):
             for working_host in [self.ready_host_set, self.running_host_set]:
                 dead_hosts = working_host - active_host_set
                 removed_hosts |= dead_hosts
-                LOGGER.debug('dead hosts: %s', dead_hosts)
+                if dead_hosts:
+                    LOGGER.debug('dead hosts: %s', dead_hosts)
                 working_host -= dead_hosts
 
             # add the active hosts to the ready host set
