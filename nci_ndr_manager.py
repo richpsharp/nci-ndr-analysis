@@ -27,6 +27,7 @@ from osgeo import gdal
 from osgeo import osr
 import flask
 import ecoshard
+import numpy
 import pygeoprocessing
 import requests
 import retrying
@@ -401,16 +402,19 @@ def processing_status():
         approx_time_left_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
         result_string = (
-            'uptime: %s<br>'
-            'processing %.2f watersheds every second<br>'
-            'approx_time_left: %s<br>'
-            'total to process: %s<br>'
             'percent complete: %.2f%% (%s)<br>'
+            'total to process: %s<br>'
+            'approx time left: %s<br>'
+            'processing %.2f watersheds every second<br>'
+            'uptime: %s<br>'
             'active workers: %d<br>'
             'ready workers: %d<br>' % (
-                uptime_str, processing_rate, approx_time_left_str, total_count,
-                processed_count/total_count*100,
-                processed_count, active_count, ready_count))
+                processed_count/total_count*100, processed_count,
+                total_count,
+                approx_time_left_str,
+                processing_rate,
+                uptime_str,
+                active_count, ready_count))
         return result_string
     except Exception as e:
         return 'error: %s' % str(e)
@@ -736,6 +740,39 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
             base_raster_path,
             (GLOBAL_STITCH_WGS84_CELL_SIZE, -GLOBAL_STITCH_WGS84_CELL_SIZE),
             wgs84_base_raster_path, 'near', target_sr_wkt=WGS84_WKT)
+
+        master_raster = gdal.OpenEx(
+            master_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+        master_band = master_raster.GetRasterBand(1)
+        master_raster_info = pygeoprocessing.get_raster_info(master_raster_path)
+        master_nodata = master_raster_info['nodata'][0]
+        base_raster_info = pygeoprocessing.get_raster_info(base_raster_path)
+        master_gt = master_raster_info['geotransform']
+        base_gt = base_raster_info['geotransform']
+        base_nodata = base_raster_info['nodata']
+
+        target_x_off = int((base_gt[0] - master_gt[0]) / master_gt[1])
+        target_y_off = int((base_gt[3] - master_gt[3]) / master_gt[5])
+
+        for offset_dict, base_block in pygeoprocessing.iterblocks(
+                (base_raster_path, 1)):
+            master_block = master_band.ReadAsArray(
+                xoff=offset_dict['xoff']+target_x_off,
+                yoff=offset_dict['yoff']+target_y_off,
+                win_xsize=offset_dict['win_xsize'],
+                win_ysize=offset_dict['win_ysize'])
+            valid_mask = (
+                numpy.isclose(master_block, master_nodata) &
+                numpy.isclose(base_block, base_nodata))
+            master_block[valid_mask] = base_block[valid_mask]
+            master_band.WriteArray(
+                master_block,
+                xoff=offset_dict['xoff']+target_x_off,
+                yoff=offset_dict['yoff']+target_y_off)
+        master_band.FlushCache()
+        master_band = None
+        master_raster = None
+
     except Exception:
         LOGGER.exception('error on stitch into')
     finally:
@@ -792,7 +829,9 @@ def stitch_worker():
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
-                for watershed_basename, fid, workspace_url in update_ws_fid_list:
+                LOGGER.debug('resutl of update list: %s', update_ws_fid_list)
+                for watershed_basename, fid, workspace_url in (
+                        update_ws_fid_list):
                     workspace_zip_path = os.path.join(
                         STITCH_DIR, os.path.basename(workspace_url))
                     ecoshard.download_url(workspace_url, workspace_zip_path)
