@@ -196,9 +196,6 @@ def create_index(database_path):
         """
         CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
         ON job_status (watershed_basename, fid);
-
-        CREATE UNIQUE INDEX IF NOT EXISTS job_status_index
-        ON job_status (job_status);
         """)
     connection = sqlite3.connect(database_path)
     cursor = connection.cursor()
