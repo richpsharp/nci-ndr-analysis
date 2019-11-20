@@ -19,6 +19,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 import zipfile
 
 from osgeo import gdal
@@ -695,34 +696,38 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
 
 def stitch_worker():
     """Mange the stitching of a raster."""
-    task_graph = taskgraph.TaskGraph(STITCH_DIR, 0)
-    raster_id_path_map = {}
-    for raster_id, (path_prefix, gdal_type, nodata_value) in (
-            GLOBAL_STITCH_MAP.items()):
-        stitch_raster_path = os.path.join(STITCH_DIR, '%s.tif' % raster_id)
-        raster_id_path_map[raster_id] = stitch_raster_path
-        stitch_raster_token_path = '%s.CREATED' % (
-            os.path.splitext(stitch_raster_path)[0])
-        task_graph.add_task(
-            func=make_empty_wgs84_raster,
-            args=(
-                GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
-                stitch_raster_path, stitch_raster_token_path),
-            target_path_list=[stitch_raster_token_path],
-            task_name='make base %s' % raster_id)
+    try:
+        task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
+        raster_id_path_map = {}
+        for raster_id, (path_prefix, gdal_type, nodata_value) in (
+                GLOBAL_STITCH_MAP.items()):
+            stitch_raster_path = os.path.join(STITCH_DIR, '%s.tif' % raster_id)
+            raster_id_path_map[raster_id] = stitch_raster_path
+            stitch_raster_token_path = '%s.CREATED' % (
+                os.path.splitext(stitch_raster_path)[0])
+            task_graph.add_task(
+                func=make_empty_wgs84_raster,
+                args=(
+                    GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
+                    stitch_raster_path, stitch_raster_token_path),
+                target_path_list=[stitch_raster_token_path],
+                task_name='make base %s' % raster_id)
 
-        create_table_sql = (
-            '''
-            CREATE TABLE IF NOT EXISTS %s_stitched_status (
-                watershed_basename TEXT NOT NULL,
-                fid INT NOT NULL);
+            create_table_sql = (
+                '''
+                CREATE TABLE IF NOT EXISTS %s_stitched_status (
+                    watershed_basename TEXT NOT NULL,
+                    fid INT NOT NULL);
 
-            CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-            ON %s_stitched_status (watershed_basename, fid);
-            ''') % (raster_id, raster_id)
-        execute_sql_on_database(
-            create_table_sql, STATUS_DATABASE_PATH, query=False)
-    task_graph.join()
+                CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
+                ON %s_stitched_status (watershed_basename, fid);
+                ''') % (raster_id, raster_id)
+
+            execute_sql_on_database(
+                create_table_sql, STATUS_DATABASE_PATH, query=False)
+        task_graph.join()
+    except Exception:
+        LOGGER.exception('ERROR on stitched worker %s', traceback.format_exc())
 
     while True:
         # update the stitch with the latest.
