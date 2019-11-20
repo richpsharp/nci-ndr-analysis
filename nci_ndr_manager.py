@@ -819,6 +819,7 @@ def stitch_worker():
             LOGGER.debug('searching for a new stitch')
             for raster_id, (path_prefix, gdal_type, nodata_value) in (
                     GLOBAL_STITCH_MAP.items()):
+                LOGGER.debug('processing raster %s', raster_id)
                 select_not_processed = (
                     'SELECT t_job.watershed_basename, t_job.fid, workspace_url '
                     'FROM job_status t_job '
@@ -829,7 +830,7 @@ def stitch_worker():
                     'workspace_url IS NOT NULL' % raster_id)
                 update_ws_fid_list = execute_sql_on_database(
                     select_not_processed, STATUS_DATABASE_PATH, query=True)
-                LOGGER.debug('resutl of update list: %s', update_ws_fid_list)
+                LOGGER.debug('result of update list: %s', update_ws_fid_list)
                 for watershed_basename, fid, workspace_url in (
                         update_ws_fid_list):
                     workspace_zip_path = os.path.join(
