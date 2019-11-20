@@ -789,7 +789,7 @@ if __name__ == '__main__':
         target=reschedule_worker)
     reschedule_worker_thread.start()
 
-    stitch_worker_process = multiprocessing.Process(
+    stitch_worker_process = threading.Thread(
         target=stitch_worker)
     stitch_worker_process.start()
 
