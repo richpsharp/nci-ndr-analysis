@@ -93,10 +93,7 @@ def main():
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(
-        WORKSPACE_DIR, multiprocessing.cpu_count(), 60.0)
-
-    # used to create dynamic paths
+    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
 
     download_task_map = {}
     # download all the base data
@@ -544,8 +541,8 @@ if __name__ == '__main__':
     LOGGER.debug('starting ndr worker')
     ndr_worker_thread.start()
 
-    for _ in range(multiprocessing.cpu_count()*4):
-        ndr_single_worker_process = threading.Thread(
+    for _ in range(multiprocessing.cpu_count()):
+        ndr_single_worker_process = multiprocessing.Process(
             target=ndr_single_worker, args=(
                 single_run_work_queue, error_queue))
         LOGGER.debug('starting single worker process')
