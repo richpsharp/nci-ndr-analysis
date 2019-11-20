@@ -731,14 +731,12 @@ def stitch_worker():
         # update the stitch with the latest.
         for raster_id in GLOBAL_STITCH_MAP:
             select_not_processed = (
-                '''
-                SELECT t_job.watershed_basename, t_job.fid
-                FROM job_status t_job
-                LEFT JOIN %s_stitched_status t_st
-                ON t_st.watershed_basename = t_job.watershed_basename
-                AND t_st.fid = t_job.fid
-                WHERE t_st.fid IS NULL
-                ''')
+                'SELECT t_job.watershed_basename, t_job.fid '
+                'FROM job_status t_job '
+                'LEFT JOIN %s_stitched_status t_st '
+                'ON t_st.watershed_basename = t_job.watershed_basename '
+                'AND t_st.fid = t_job.fid '
+                'WHERE t_st.fid IS NULL ' % raster_id)
             update_ws_fid_list = execute_sql_on_database(
                 select_not_processed, STATUS_DATABASE_PATH, query=True)
             for watershed_basename, fid in update_ws_fid_list:
