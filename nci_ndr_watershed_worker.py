@@ -18,12 +18,10 @@ import sys
 import threading
 import time
 import traceback
-import uuid
 import zipfile
 
 from osgeo import gdal
 # set a 1GB limit for the cache
-gdal.SetCacheMax(2**30)
 from osgeo import ogr
 from osgeo import osr
 import ecoshard
@@ -34,6 +32,7 @@ import pygeoprocessing
 import requests
 import retrying
 import taskgraph
+gdal.SetCacheMax(2**30)
 
 DEM_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -172,7 +171,7 @@ def run_ndr():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('got post: %s', str(payload))
-        session_id = str(uuid.uuid4())
+        session_id = payload['session_id']
         status_url = flask.url_for(
             'get_status', _external=True, session_id=session_id)
         with GLOBAL_LOCK:
@@ -181,7 +180,6 @@ def run_ndr():
             (payload['watershed_fid_tuple_list'],
              payload['callback_url'],
              payload['bucket_uri_prefix'],
-             payload['worker_ip_port'],
              session_id,))
         return {'status_url': status_url}, 201
     except Exception:
@@ -366,7 +364,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
         try:
             payload = work_queue.get()
             (watershed_fid_tuple_list, callback_url, bucket_uri_prefix,
-                worker_ip_port, session_id) = payload
+                session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
             watershed_fid_url_list = []
@@ -394,7 +392,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             data_payload = {
                 'watershed_fid_url_list': watershed_fid_url_list,
                 'time_per_area': (time.time()-start_time) / total_area,
-                'worker_ip_port': worker_ip_port,
+                'session_id': session_id,
             }
             LOGGER.debug(
                 'about to callback to this url: %s', callback_url)

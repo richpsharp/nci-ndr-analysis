@@ -10,8 +10,6 @@ import argparse
 import datetime
 import json
 import logging
-import math
-import multiprocessing
 import os
 import pathlib
 import queue
@@ -22,6 +20,7 @@ import sys
 import threading
 import time
 import traceback
+import uuid
 import zipfile
 
 from osgeo import gdal
@@ -74,12 +73,16 @@ WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
 GLOBAL_STITCH_MAP = {
-    'n_export': ('workspace_worker/[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
+    'n_export': (
+        'workspace_worker/[BASENAME]_[FID]/n_export.tif',
+        gdal.GDT_Float32, -1),
     'modified_load': (
-        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
+        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/'
+        'modified_load_n.tif',
         gdal.GDT_Float32, -1),
     'stream': (
-        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif', gdal.GDT_Byte, -1)
+        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
+        gdal.GDT_Byte, -1)
 }
 
 APP = flask.Flask(__name__)
@@ -421,13 +424,14 @@ def processing_complete():
         LOGGER.debug('this was the payload: %s', payload)
         watershed_fid_url_list = payload['watershed_fid_url_list']
         time_per_area = payload['time_per_area']
-        worker_ip_port = payload['worker_ip_port']
+        session_id = payload['session_id']
         global TIME_PER_AREA
         with GLOBAL_LOCK:
             TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
-            del SCHEDULED_MAP[worker_ip_port]
+            host = SCHEDULED_MAP[session_id]['host']
+            del SCHEDULED_MAP[session_id]
         RESULT_QUEUE.put(watershed_fid_url_list)
-        GLOBAL_WORKER_STATE_SET.set_ready_host(worker_ip_port)
+        GLOBAL_WORKER_STATE_SET.set_ready_host(host)
         return 'complete', 202
     except Exception:
         LOGGER.exception(
@@ -536,11 +540,12 @@ def send_job(watershed_fid_tuple_list):
             callback_url = flask.url_for(
                 'processing_complete', _external=True)
         worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+        session_id = str(uuid.uuid4())
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
-            'worker_ip_port': worker_ip_port,
+            'session_id': session_id,
         }
 
         LOGGER.debug('payload: %s', data_payload)
@@ -554,10 +559,11 @@ def send_job(watershed_fid_tuple_list):
         if response.ok:
             with GLOBAL_LOCK:
                 LOGGER.debug('%s scheduled', watershed_fid_tuple_list)
-                SCHEDULED_MAP[worker_ip_port] = {
+                SCHEDULED_MAP[session_id] = {
                     'status_url': response.json()['status_url'],
                     'watershed_fid_tuple_list': watershed_fid_tuple_list,
                     'last_time_accessed': time.time(),
+                    'host': worker_ip_port
                 }
         else:
             raise RuntimeError(str(response))
@@ -618,7 +624,8 @@ def worker_status_monitor():
             failed_job_list = []
             with GLOBAL_LOCK:
                 hosts_to_remove = set()
-                for host, value in SCHEDULED_MAP.items():
+                for session_id, value in SCHEDULED_MAP.items():
+                    host = value['host']
                     if current_time - value['last_time_accessed']:
                         response = requests.get(value['status_url'])
                         if response.ok:
@@ -626,10 +633,10 @@ def worker_status_monitor():
                         else:
                             failed_job_list.put(
                                 value['watershed_fid_tuple_list'])
-                            hosts_to_remove.add(host)
-                for host in hosts_to_remove:
+                            hosts_to_remove.add((session_id, host))
+                for session_id, host in hosts_to_remove:
                     GLOBAL_WORKER_STATE_SET.remove_host(host)
-                    del SCHEDULED_MAP[host]
+                    del SCHEDULED_MAP[session_id]
             for watershed_fid_tuple_list in failed_job_list:
                 LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
                 RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
@@ -749,63 +756,57 @@ def stitch_worker():
 
     while True:
         # update the stitch with the latest.
-        time.sleep(60)
-        LOGGER.debug('searching for a new stitch')
-        for raster_id, (path_prefix, gdal_type, nodata_value) in (
-                GLOBAL_STITCH_MAP.items()):
-            select_not_processed = (
-                'SELECT t_job.watershed_basename, t_job.fid, t_job.workspace_url '
-                'FROM job_status t_job '
-                'LEFT JOIN %s_stitched_status t_st '
-                'ON t_st.watershed_basename = t_job.watershed_basename '
-                'AND t_st.fid = t_job.fid '
-                'WHERE t_st.fid IS NULL ' % raster_id)
-            update_ws_fid_list = execute_sql_on_database(
-                select_not_processed, STATUS_DATABASE_PATH, query=True)
-            for watershed_basename, fid, workspace_url in update_ws_fid_list:
-                workspace_zip_path = os.path.join(
-                    STITCH_DIR, os.path.basename(workspace_url))
-                ecoshard.download_url(workspace_url, workspace_zip_path)
-                zipped_path = path_prefix.replace(
-                    '[BASENAME]', watershed_basename).replace('[FID]', fid)
-                local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
-                    watershed_basename, fid))
-                with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
-                    zip_ref.extract(zipped_path, local_zip_dir)
-                LOGGER.debug(
-                    'stitching %s %s in %s', watershed_basename, fid,
-                    raster_id)
-
-                # DO THE STITCH HERE
-                os.remove(workspace_zip_path)
-                shutil.rmtree(local_zip_dir)
-
-            while True:
-                try:
-                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                    cursor = connection.cursor()
-                    update_stitched_record = (
-                        'INSERT INTO %s_stitched_status('
-                        '    watershed_basename, fid) VALUES (?, ?))' %
+        try:
+            time.sleep(60)
+            LOGGER.debug('searching for a new stitch')
+            for raster_id, (path_prefix, gdal_type, nodata_value) in (
+                    GLOBAL_STITCH_MAP.items()):
+                select_not_processed = (
+                    'SELECT t_job.watershed_basename, t_job.fid, workspace_url '
+                    'FROM job_status t_job '
+                    'LEFT JOIN %s_stitched_status t_st '
+                    'ON t_st.watershed_basename = t_job.watershed_basename '
+                    'AND t_st.fid = t_job.fid '
+                    'WHERE t_st.fid IS NULL AND'
+                    'workspace_url IS NOT NULL' % raster_id)
+                update_ws_fid_list = execute_sql_on_database(
+                    select_not_processed, STATUS_DATABASE_PATH, query=True)
+                for watershed_basename, fid, workspace_url in update_ws_fid_list:
+                    workspace_zip_path = os.path.join(
+                        STITCH_DIR, os.path.basename(workspace_url))
+                    ecoshard.download_url(workspace_url, workspace_zip_path)
+                    zipped_path = path_prefix.replace(
+                        '[BASENAME]', watershed_basename).replace('[FID]', fid)
+                    local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
+                        watershed_basename, fid))
+                    with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
+                        zip_ref.extract(zipped_path, local_zip_dir)
+                    LOGGER.debug(
+                        'stitching %s %s in %s', watershed_basename, fid,
                         raster_id)
-                    # cursor.executemany(
-                    #     update_stitched_record, update_ws_fid_list)
-                    break
-                except Exception:
-                    LOGGER.exception('exception when updating stitched status')
-                finally:
-                    connection.commit()
-                    connection.close()
 
-    # GLOBAL_STITCH_MAP = {
-    #     'n_export': ('[BASENAME]_[FID]/n_export.tif', gdal.GDT_Float32, -1),
-    #     'modified_load': (
-    #         '[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
-    #         gdal.GDT_Float32, -1),
-    #     'stream': (
-    #         '[BASENAME]_[FID]/intermediate_outputs/stream.tif',
-    #         gdal.GDT_Byte, -1)
-    # }
+                    # DO THE STITCH HERE
+                    os.remove(workspace_zip_path)
+                    shutil.rmtree(local_zip_dir)
+
+                while True:
+                    try:
+                        connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                        cursor = connection.cursor()
+                        update_stitched_record = (
+                            'INSERT INTO %s_stitched_status('
+                            '    watershed_basename, fid) VALUES (?, ?))' %
+                            raster_id)
+                        # cursor.executemany(
+                        #     update_stitched_record, update_ws_fid_list)
+                        break
+                    except Exception:
+                        LOGGER.exception('exception when updating stitched status')
+                    finally:
+                        connection.commit()
+                        connection.close()
+        except Exception:
+            LOGGER.exception('exception in stich worker')
 
 
 if __name__ == '__main__':
