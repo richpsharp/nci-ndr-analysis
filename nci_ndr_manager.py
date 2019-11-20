@@ -561,7 +561,7 @@ def worker_status_monitor():
                                 value['watershed_fid_tuple_list'])
                             hosts_to_remove.add(host)
                 for host in hosts_to_remove:
-                    del GLOBAL_WORKER_STATE_SET.remove_host(host)
+                    GLOBAL_WORKER_STATE_SET.remove_host(host)
                     del SCHEDULED_MAP[host]
             for watershed_fid_tuple_list in failed_job_list:
                 LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
