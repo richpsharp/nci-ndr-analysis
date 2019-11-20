@@ -835,7 +835,8 @@ def stitch_worker():
                         GLOBAL_STITCH_MAP.items()):
                     LOGGER.debug('processing raster %s', raster_id)
                     zipped_path = path_prefix.replace(
-                        '[BASENAME]', watershed_basename).replace('[FID]', fid)
+                        '[BASENAME]', watershed_basename).replace(
+                        '[FID]', str(fid))
                     local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
                         watershed_basename, fid))
                     with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
