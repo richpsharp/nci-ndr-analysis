@@ -822,7 +822,7 @@ def stitch_worker():
                 select_not_processed = (
                     'SELECT t_job.watershed_basename, t_job.fid, workspace_url '
                     'FROM job_status t_job '
-                    'LEFT JOIN %s_stitched_status t_st '
+                    'LEFT OUTER JOIN %s_stitched_status t_st '
                     'ON t_st.watershed_basename = t_job.watershed_basename '
                     'AND t_st.fid = t_job.fid '
                     'WHERE t_st.fid IS NULL AND '
