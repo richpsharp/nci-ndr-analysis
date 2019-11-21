@@ -855,7 +855,7 @@ def stitch_worker():
                 workspace_url = workspace_url.replace('//', '/').replace(
                     'https:/', 'https://')
                 LOGGER.debug('download url: %s', workspace_url)
-                ecoshard.download_url(workspace_url, workspace_zip_path)
+                download_url(workspace_url, workspace_zip_path)
                 for raster_id, (path_prefix, gdal_type, nodata_value) in (
                         GLOBAL_STITCH_MAP.items()):
                     LOGGER.debug('processing raster %s', raster_id)
@@ -899,6 +899,12 @@ def stitch_worker():
                         connection.close()
         except Exception:
             LOGGER.exception('exception in stich worker')
+
+@retrying.retry(
+    wait_exponential_multiplier=1000, wait_exponential_max=10000)
+def download_url(source_url, target_path):
+    """Wrapper for ecoshard.download_url."""
+    ecoshard.download_url(source_url, target_path)
 
 
 if __name__ == '__main__':
