@@ -862,7 +862,7 @@ def stitch_worker():
                     stitch_into(
                         raster_id_path_map[raster_id], local_path,
                         nodata_value)
-                    # get raster stats
+                    return True  ## for debugging
                 os.remove(workspace_zip_path)
                 shutil.rmtree(local_zip_dir)
 
