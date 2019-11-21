@@ -825,7 +825,7 @@ def stitch_worker():
             LOGGER.debug('query string: %s', select_not_processed)
             LOGGER.debug('result of update list: %s', update_ws_fid_list)
             for watershed_basename, fid, workspace_url in (
-                    update_ws_fid_list[0:1]):
+                    update_ws_fid_list[0:100]):
                 workspace_zip_path = os.path.join(
                     STITCH_DIR, os.path.basename(workspace_url))
                 # TODO: this is just a hack because there are // in some results
@@ -860,12 +860,14 @@ def stitch_worker():
                         cursor = connection.cursor()
                         update_stiched_record = (
                             'UPDATE job_status '
-                            'SET stiched_%s=1 '
-                            'WHERE watershed_basename=? AND fid=?' % raster_id)
-                        cursor.executemany(
-                             update_stiched_record,
-                             [(basename, fid) for basename, fid, _ in
-                              update_ws_fid_list])
+                            'SET stiched_n_export=1, stiched_modified_load=1'
+                            'WHERE watershed_basename=? AND fid=?')
+                        LOGGER.debug(
+                            'attempting update %s', update_stiched_record)
+                        cursor.execute(
+                             update_stiched_record, (watershed_basename, fid))
+                        LOGGER.debug(
+                            'updated record! %s %s', watershed_basename, fid)
                         break
                     except Exception:
                         LOGGER.exception(
