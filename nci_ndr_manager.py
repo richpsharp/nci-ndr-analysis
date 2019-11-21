@@ -757,7 +757,7 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
 
         target_x_off = int((base_gt[0] - master_gt[0]) / master_gt[1])
         target_y_off = int((base_gt[3] - master_gt[3]) / master_gt[5])
-
+        LOGGER.debug('%f %f %s', target_x_off, target_y_off, base_raster_info)
         for offset_dict, base_block in pygeoprocessing.iterblocks(
                 (wgs84_base_raster_path, 1)):
             LOGGER.debug(offset_dict)
