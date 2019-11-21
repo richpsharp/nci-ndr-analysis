@@ -766,8 +766,8 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
                 win_xsize=offset_dict['win_xsize'],
                 win_ysize=offset_dict['win_ysize'])
             valid_mask = (
-                numpy.isclose(master_block, master_nodata) &
-                numpy.isclose(base_block, base_nodata))
+                ~numpy.isclose(master_block, master_nodata) &
+                ~numpy.isclose(base_block, base_nodata))
             master_block[valid_mask] = base_block[valid_mask]
             master_band.WriteArray(
                 master_block,
@@ -819,7 +819,7 @@ def stitch_worker():
 
     while True:
         # update the stitch with the latest.
-        time.sleep(10)
+        #time.sleep(10)
         try:
             LOGGER.debug('searching for a new stitch')
             select_not_processed = (
