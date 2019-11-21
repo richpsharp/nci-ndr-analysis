@@ -757,10 +757,11 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
 
         target_x_off = int((base_gt[0] - master_gt[0]) / master_gt[1])
         target_y_off = int((base_gt[3] - master_gt[3]) / master_gt[5])
-        LOGGER.debug('%f %f %s', target_x_off, target_y_off, base_raster_info)
+        LOGGER.debug(
+            'stitch into: %f %f %s', target_x_off, target_y_off,
+            base_raster_info)
         for offset_dict, base_block in pygeoprocessing.iterblocks(
                 (wgs84_base_raster_path, 1)):
-            LOGGER.debug(offset_dict)
             master_block = master_band.ReadAsArray(
                 xoff=offset_dict['xoff']+target_x_off,
                 yoff=offset_dict['yoff']+target_y_off,
@@ -806,21 +807,22 @@ def stitch_worker():
     except Exception:
         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
 
-    # reset database to all unstitched
-    connection = sqlite3.connect(STATUS_DATABASE_PATH)
-    cursor = connection.cursor()
-    update_stiched_record = (
-        'UPDATE job_status '
-        'SET stiched_n_export=0, stiched_modified_load=0 '
-        'WHERE stiched_n_export=1 OR stiched_modified_load=1')
-    cursor.execute(update_stiched_record)
-    connection.commit()
-    connection.close()
-    cursor = None
+    # This section can be uncommented for debugging in the case of wanting to
+    # reset all the stitched rasters
+    # connection = sqlite3.connect(STATUS_DATABASE_PATH)
+    # cursor = connection.cursor()
+    # update_stiched_record = (
+    #     'UPDATE job_status '
+    #     'SET stiched_n_export=0, stiched_modified_load=0 '
+    #     'WHERE stiched_n_export=1 OR stiched_modified_load=1')
+    # cursor.execute(update_stiched_record)
+    # connection.commit()
+    # connection.close()
+    # cursor = None
 
     while True:
         # update the stitch with the latest.
-        #time.sleep(10)
+        time.sleep(10)
         try:
             LOGGER.debug('searching for a new stitch')
             select_not_processed = (
@@ -838,7 +840,7 @@ def stitch_worker():
             LOGGER.debug('query string: %s', select_not_processed)
             LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
             for watershed_basename, fid, workspace_url in (
-                    update_ws_fid_list[0:100]):
+                    update_ws_fid_list):
                 workspace_zip_path = os.path.join(
                     STITCH_DIR, os.path.basename(workspace_url))
                 # TODO: this is just a hack because there are // in some results
@@ -863,7 +865,6 @@ def stitch_worker():
                     stitch_into(
                         raster_id_path_map[raster_id], local_path,
                         nodata_value)
-                    return True  ## for debugging
                 os.remove(workspace_zip_path)
                 shutil.rmtree(local_zip_dir)
 
