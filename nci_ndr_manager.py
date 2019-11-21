@@ -737,7 +737,7 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
     """Stitch `base`into `master` by only overwriting non-nodata values."""
     try:
         wgs84_base_raster_path = (
-            '%s_wgs84.%s' % os.path.splitext(base_raster_path))
+            '%s_wgs84%s' % os.path.splitext(base_raster_path))
         pygeoprocessing.warp_raster(
             base_raster_path,
             (GLOBAL_STITCH_WGS84_CELL_SIZE, -GLOBAL_STITCH_WGS84_CELL_SIZE),
@@ -780,7 +780,7 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
     except Exception:
         LOGGER.exception('error on stitch into')
     finally:
-        os.remove(wgs84_base_raster_path)
+        pass # os.remove(wgs84_base_raster_path)
 
 
 def stitch_worker():
@@ -835,7 +835,7 @@ def stitch_worker():
             connection.close()
             cursor = None
             LOGGER.debug('query string: %s', select_not_processed)
-            LOGGER.debug('result of update list: %s', update_ws_fid_list)
+            LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
             for watershed_basename, fid, workspace_url in (
                     update_ws_fid_list[0:100]):
                 workspace_zip_path = os.path.join(
