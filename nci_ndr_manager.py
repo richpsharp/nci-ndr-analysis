@@ -380,6 +380,12 @@ def processing_status():
             'SELECT count(1) from job_status '
             'where job_status=\'PRESCHEDULED\'')
         prescheduled_count = int(cursor.fetchone()[0])
+
+        cursor.execute(
+            'SELECT count(1) FROM job_status '
+            'WHERE (stiched_n_export=1 AND stiched_modified_load=1)')
+        stitched_count = int(cursor.fetchone()[0])
+
         connection.commit()
         connection.close()
         processed_count = total_count - prescheduled_count
@@ -404,8 +410,9 @@ def processing_status():
         approx_time_left_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
         result_string = (
-            'percent complete: %.2f%% (%s)<br>'
-            'total to process: %s<br>'
+            'percent complete: %.2f%% (%d)<br>'
+            'total to process: %d<br>'
+            'percent stitched: %.2f%% (%d)<br>'
             'approx time left: %s<br>'
             'processing %.2f watersheds every second<br>'
             'uptime: %s<br>'
@@ -413,6 +420,7 @@ def processing_status():
             'ready workers: %d<br>' % (
                 processed_count/total_count*100, processed_count,
                 total_count,
+                stitched_count/total_count*100, stitched_count,
                 approx_time_left_str,
                 processing_rate,
                 uptime_str,
