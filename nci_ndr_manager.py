@@ -760,13 +760,14 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
 
         for offset_dict, base_block in pygeoprocessing.iterblocks(
                 (wgs84_base_raster_path, 1)):
+            LOGGER.debug(offset_dict)
             master_block = master_band.ReadAsArray(
                 xoff=offset_dict['xoff']+target_x_off,
                 yoff=offset_dict['yoff']+target_y_off,
                 win_xsize=offset_dict['win_xsize'],
                 win_ysize=offset_dict['win_ysize'])
             valid_mask = (
-                ~numpy.isclose(master_block, master_nodata) &
+                numpy.isclose(master_block, master_nodata) &
                 ~numpy.isclose(base_block, base_nodata))
             master_block[valid_mask] = base_block[valid_mask]
             master_band.WriteArray(
