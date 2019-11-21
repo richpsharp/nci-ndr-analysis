@@ -860,7 +860,7 @@ def stitch_worker():
                         cursor = connection.cursor()
                         update_stiched_record = (
                             'UPDATE job_status '
-                            'SET stiched_n_export=1, stiched_modified_load=1'
+                            'SET stiched_n_export=1, stiched_modified_load=1 '
                             'WHERE watershed_basename=? AND fid=?')
                         LOGGER.debug(
                             'attempting update %s', update_stiched_record)
