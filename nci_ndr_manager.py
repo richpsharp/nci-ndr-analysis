@@ -805,6 +805,18 @@ def stitch_worker():
     except Exception:
         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
 
+    # reset database to all unstitched
+    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+    cursor = connection.cursor()
+    update_stiched_record = (
+        'UPDATE job_status '
+        'SET stiched_n_export=0, stiched_modified_load=0 '
+        'WHERE stiched_n_export=1 OR stiched_modified_load=1')
+    cursor.execute(update_stiched_record)
+    connection.commit()
+    connection.close()
+    cursor = None
+
     while True:
         # update the stitch with the latest.
         time.sleep(10)
