@@ -1,4 +1,5 @@
 """Sample NDR watersheds from a database and report areas around points."""
+import argparse
 import glob
 import logging
 import os
@@ -53,7 +54,7 @@ def download_and_unzip(url, target_dir, target_token_path):
         touchfile.write(f'unzipped {zipfile_path}')
 
 
-def build_watershed_r_tree(watershed_dir_path, r_tree_pickle_path):
+def build_watershed_r_tree(watershed_dir_path):
     """Create a Shapely STR-packed R-tree off all geometry.
 
     Parameters:
@@ -63,7 +64,7 @@ def build_watershed_r_tree(watershed_dir_path, r_tree_pickle_path):
             containing an index of the watershed polygons.
 
     Returns:
-        None.
+        Watershed r-tree.
 
     """
     shapely_geometry_list = []
@@ -80,10 +81,56 @@ def build_watershed_r_tree(watershed_dir_path, r_tree_pickle_path):
             shapely_geometry_list.append(shapely_geom)
     LOGGER.debug('building r-tree')
     r_tree = shapely.strtree.STRtree(shapely_geometry_list)
-    LOGGER.debug('pickling r-tree')
-    with open(r_tree_pickle_path, 'wb') as r_tree_pickle_file:
-        pickle.dump(r_tree, r_tree_pickle_file)
-    LOGGER.debug('pickle complete')
+    return r_tree
+
+
+def sample_points(
+        point_vector_path, watershed_r_tree_pickle_path,
+        subraster_to_sample_path,
+        database_path, target_sample_point_path):
+    """Sample watershed subrasters across `point_vector_path`.
+
+    Create a new point vector path containing the same geometry from
+    `point_vector_path`. The target path will contain fields
+
+    Parameters:
+        point_vector_path (str): path to a point vector to sample.
+        watershed_r_tree_pickle_path (str): path to a shapely STRTree object
+            that when queried provides objcts with "fid" and "basename" fields
+            indicating the basename/fid pair to find in `database_path`.
+        subraster_to_sample_path (str): a partial path relative to a watershed
+            workspace that will be sampled at the given radius and placed in
+            the `target_fieldname` field of `target_sample_point_path.
+        database_path (str): path to a database containing the table
+            `job_status` with fields `watershed_basename`, `fid`, and
+            `workspace_url`. The fields `watershed_basename` and `fid`
+            correspond with the `basename` and `fid` members in the objects
+            queried in the r-tree.
+        target_sample_point_path (str): created by this call and contains
+            the same geometry as `point_vector_path` as well as its `OBJECTID`.
+            A new parameter `target_fieldname` will be added and will correspond
+            to the sum of the `subraster_to_sample_path` raster sample.
+
+    Returns:
+        None.
+
+    """
+    LOGGER.debug('build r tree')
+    r_tree = build_watershed_r_tree(WATERSHEDS_DIR)
+    LOGGER.debug('sample points')
+    point_vector = gdal.OpenEx(point_vector_path, gdal.OF_VECTOR)
+    point_layer = point_vector.GetLayer()
+    for point_feature in point_layer:
+        point_geom = point_feature.GetGeometryRef()
+        point_shapely = shapely.wkb.loads(point_geom.ExportToWkb())
+        watershed_list = r_tree.query(point_shapely)
+        if watershed_list:
+            watershed_basename = watershed_list[0].basename
+            fid = watershed_list[0].fid
+            LOGGER.debug('%s: %d', watershed_basename, fid)
+        else:
+            LOGGER.debug('no watershed found')
+
 
 if __name__ == '__main__':
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
@@ -91,6 +138,10 @@ if __name__ == '__main__':
             os.makedirs(dir_path)
         except OSError:
             pass
+
+    parser = argparse.ArgumentParser(description='NDR Point Sampler.')
+    parser.add_argument('point_path', type=str, help='path to point shapefile')
+    args = parser.parse_args()
 
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
 
@@ -108,12 +159,17 @@ if __name__ == '__main__':
         target_path_list=[watersheds_done_token_path],
         task_name='download and unzip watersheds')
 
-    build_r_tree_task = task_graph.add_task(
-        func=build_watershed_r_tree,
-        args=(WATERSHEDS_DIR, R_TREE_PICKLE_PATH),
-        target_path_list=[R_TREE_PICKLE_PATH],
-        dependent_task_list=[download_watersheds_task],
-        task_name='pickle r tree')
+    subraster_to_sample_path = None
+    target_sample_point_path = os.path.join(
+        WORKSPACE_DIR, os.path.splitext(os.path.basename(args.point_path))[0])
+    sample_points_task = task_graph.add_task(
+        func=sample_points,
+        args=(
+            args.point_path, R_TREE_PICKLE_PATH,
+            subraster_to_sample_path,
+            NDR_WATERSHED_DATABASE_PATH, target_sample_point_path),
+        target_path_list=[target_sample_point_path],
+        task_name='sample points')
 
     task_graph.join()
     task_graph.close()
