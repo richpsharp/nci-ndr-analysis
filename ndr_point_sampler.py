@@ -2,6 +2,7 @@
 import logging
 import os
 import sys
+import zipfile
 
 import ecoshard
 import taskgraph
