@@ -67,14 +67,13 @@ def build_watershed_r_tree(watershed_dir_path, r_tree_pickle_path):
 
     """
     shapely_geometry_list = []
-    for path in glob.glob(watershed_dir_path, '*.shp'):
+    for path in glob.glob(os.path.join(watershed_dir_path, '*.shp')):
         watershed_id = os.path.basename(os.path.splitext(path)[0])
         LOGGER.debug(path)
         vector = gdal.OpenEx(path, gdal.OF_VECTOR)
         layer = vector.GetLayer()
         for watershed_feature in layer:
-            watershed_geom = shapely.wkb.loads(
-                watershed_feature.GetGeometryRef())
+            watershed_geom = watershed_feature.GetGeometryRef()
             shapely_geom = shapely.wkb.loads(watershed_geom.ExportToWkb())
             shapely_geom.basename = watershed_id
             shapely_geom.fid = watershed_feature.GetFID()
@@ -87,7 +86,7 @@ def build_watershed_r_tree(watershed_dir_path, r_tree_pickle_path):
     LOGGER.debug('pickle complete')
 
 if __name__ == '__main__':
-    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR]:
+    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
         try:
             os.makedirs(dir_path)
         except OSError:
