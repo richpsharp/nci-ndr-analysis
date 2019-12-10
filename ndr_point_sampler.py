@@ -9,6 +9,8 @@ import zipfile
 
 from osgeo import gdal
 from osgeo import ogr
+from osgeo import osr
+import pygeoprocessing
 import shapely.geometry
 import shapely.strtree
 import shapely.wkb
@@ -86,6 +88,53 @@ def build_watershed_r_tree(watershed_dir_path):
     LOGGER.debug('building r-tree')
     r_tree = shapely.strtree.STRtree(shapely_geometry_list)
     return r_tree
+
+
+def create_local_buffer_region(
+        raster_to_sample_path, sample_point_lat_lng_wkt, buffer_vector_path):
+    """Creates a buffer geometry from a point and samples the raster.
+
+    Parameters:
+        raster_to_sample_path (str): path to a raster to sum the values on.
+        buffer_vector_path (str): path to a target vector created by this call
+            centered on `sample_point_lat_lng_wkt` in a local coordinate system.
+
+    """
+    sample_point = ogr.CreateGeometryFromWkt(sample_point_lat_lng_wkt)
+    wgs84_srs = osr.SpatialReference()
+    wgs84_srs.ImportFromEPSG(4326)
+
+    target_srs = osr.SpatialReference()
+    target_srs.ImportFromWkt(
+        pygeoprocessing.get_raster_info(raster_to_sample_path)['projection'])
+
+    coord_trans = osr.CoordinateTransformation(wgs84_srs, target_srs)
+    sample_point.Transform(coord_trans)
+    buffer_geom = sample_point.Buffer(10000)
+
+    target_driver = gdal.GetDriverByName('GPKG')
+    target_vector = target_driver.Create(
+        buffer_vector_path, 0, 0, 0, gdal.GDT_Unknown)
+    layer_name = os.path.splitext(os.path.basename(
+        buffer_vector_path))[0]
+    target_layer = target_vector.CreateLayer(
+        layer_name, target_srs, ogr.wkbPolygon)
+    target_layer.CreateField(ogr.FieldDefn('sum', ogr.OFTReal))
+    feature_defn = target_layer.GetLayerDefn()
+    buffer_feature = ogr.Feature(feature_defn)
+    buffer_feature.SetGeometry(buffer_geom)
+    target_layer.CreateFeature(buffer_feature)
+    target_layer.SyncToDisk()
+
+    buffer_stats = pygeoprocessing.zonal_statistics(
+        (raster_to_sample_path, 1), buffer_vector_path,
+        polygons_might_overlap=False, working_dir=CHURN_DIR)
+    LOGGER.debug(buffer_stats)
+    buffer_feature.SetField('sum', buffer_stats[1]['sum'])
+    target_layer.SetFeature(buffer_feature)
+    target_layer.SyncToDisk()
+    target_layer = None
+    target_vector = None
 
 
 def sample_points(
@@ -171,18 +220,28 @@ def sample_points(
                 'watershed_workspaces//', 'watershed_workspaces/')
             LOGGER.info('%s %d: %s', watershed_basename, fid, workspace_url)
             raster_to_sample_path = os.path.join(
-                'workspace_worker', '%s_%d' % (watershed_basename, fid),
-                'n_export.tif')
+                WATERSHED_WORKSPACE_DIR, 'workspace_worker',
+                '%s_%d' % (watershed_basename, fid), 'n_export.tif')
 
-            watershed_workspace_token_path = '%s_%d.UNZIPPED' % (
-                watershed_basename, fid)
+            watershed_workspace_token_path = os.path.join(
+                CHURN_DIR, '%s_%d.UNZIPPED' % (watershed_basename, fid))
             download_workspace_task = task_graph.add_task(
                 func=download_and_unzip,
                 args=(workspace_url, WATERSHED_WORKSPACE_DIR,
                       watershed_workspace_token_path),
-                target_path_list=[watersheds_done_token_path],
+                target_path_list=[watershed_workspace_token_path],
                 task_name='download and unzip watersheds')
 
+            buffer_vector_path = os.path.join(
+                os.path.dirname(raster_to_sample_path), 'buffer.gpkg')
+            create_local_buffer_region_task = task_graph.add_task(
+                func=create_local_buffer_region,
+                args=(raster_to_sample_path, point_geom.ExportToWkt(),
+                      buffer_vector_path),
+                dependent_task_list=[download_workspace_task],
+                target_path_list=[buffer_vector_path])
+            create_local_buffer_region_task.join()
+            break
         target_layer.CreateFeature(feature)
         feature = None
 
