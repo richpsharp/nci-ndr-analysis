@@ -3,6 +3,7 @@ import argparse
 import glob
 import logging
 import os
+import sqlite3
 import sys
 import zipfile
 
@@ -29,6 +30,8 @@ NDR_WATERSHED_DATABASE_PATH = os.path.join(
     ECOSHARD_DIR, 'ndr_global_run_database.sqlite3')
 WATERSHEDS_DIR = os.path.join(
     ECOSHARD_DIR, 'watersheds_globe_HydroSHEDS_15arcseconds')
+WATERSHED_WORKSPACE_DIR = os.path.join(
+    ECOSHARD_DIR, 'watershed_workspaces')
 R_TREE_PICKLE_PATH = os.path.join(CHURN_DIR, 'watershed_r_tree.pickle')
 
 logging.basicConfig(
@@ -131,27 +134,65 @@ def sample_points(
         layer_name, point_layer.GetSpatialRef(), ogr.wkbPoint)
 
     target_layer.CreateField(ogr.FieldDefn('OBJECTID', ogr.OFTInteger))
+    target_layer.CreateField(ogr.FieldDefn('basinid', ogr.OFTInteger))
     target_layer.CreateField(ogr.FieldDefn('N_export', ogr.OFTReal))
     feature_defn = target_layer.GetLayerDefn()
+
+    connection = sqlite3.connect(database_path)
+    cursor = connection.cursor()
+
     for point_feature in point_layer:
         point_geom = point_feature.GetGeometryRef()
         point_shapely = shapely.wkb.loads(point_geom.ExportToWkb())
         watershed_list = r_tree.query(point_shapely)
-        if watershed_list:
-            watershed_basename = watershed_list[0].basename
-            fid = watershed_list[0].fid
-            LOGGER.debug('%s: %d', watershed_basename, fid)
-            feature = ogr.Feature(feature_defn)
-            feature.SetGeometry(point_geom.Clone())
-            feature.SetField('OBJECTID', point_feature.GetField('OBJECTID'))
-            target_layer.CreateFeature(feature)
-            feature = None
-        else:
+        if not watershed_list:
             LOGGER.debug('no watershed found')
+            continue
+        for watershed in watershed_list:
+            if watershed.intersects(point_shapely):
+                watershed_basename = watershed.basename
+                fid = watershed.fid
+                break
+        cursor.execute(
+            'SELECT workspace_url from job_status '
+            'where watershed_basename=? and fid=?', (
+                watershed_basename, fid))
+        workspace_url = cursor.fetchone()[0]
+        feature = ogr.Feature(feature_defn)
+        feature.SetGeometry(point_geom.Clone())
+        feature.SetField('OBJECTID', point_feature.GetField('OBJECTID'))
+        feature.SetField('basinid', fid)
+        if workspace_url is None:
+            LOGGER.error(
+                '%s %d: has no workspace', watershed_basename, fid)
+            feature.SetField('N_export', -9999)
+        else:
+            workspace_url = workspace_url.replace(
+                'watershed_workspaces//', 'watershed_workspaces/')
+            LOGGER.info('%s %d: %s', watershed_basename, fid, workspace_url)
+            raster_to_sample_path = os.path.join(
+                'workspace_worker', '%s_%d' % (watershed_basename, fid),
+                'n_export.tif')
+
+            watershed_workspace_token_path = '%s_%d.UNZIPPED' % (
+                watershed_basename, fid)
+            download_workspace_task = task_graph.add_task(
+                func=download_and_unzip,
+                args=(workspace_url, WATERSHED_WORKSPACE_DIR,
+                      watershed_workspace_token_path),
+                target_path_list=[watersheds_done_token_path],
+                task_name='download and unzip watersheds')
+
+        target_layer.CreateFeature(feature)
+        feature = None
+
+    connection.commit()
+    connection.close()
 
 
 if __name__ == '__main__':
-    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
+    for dir_path in [
+            WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, WATERSHED_WORKSPACE_DIR]:
         try:
             os.makedirs(dir_path)
         except OSError:
