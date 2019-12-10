@@ -3,11 +3,11 @@ import argparse
 import glob
 import logging
 import os
-import pickle
 import sys
 import zipfile
 
 from osgeo import gdal
+from osgeo import ogr
 import shapely.geometry
 import shapely.strtree
 import shapely.wkb
@@ -79,6 +79,7 @@ def build_watershed_r_tree(watershed_dir_path):
             shapely_geom.basename = watershed_id
             shapely_geom.fid = watershed_feature.GetFID()
             shapely_geometry_list.append(shapely_geom)
+        break
     LOGGER.debug('building r-tree')
     r_tree = shapely.strtree.STRtree(shapely_geometry_list)
     return r_tree
@@ -120,6 +121,18 @@ def sample_points(
     LOGGER.debug('sample points')
     point_vector = gdal.OpenEx(point_vector_path, gdal.OF_VECTOR)
     point_layer = point_vector.GetLayer()
+
+    target_driver = gdal.GetDriverByName('GPKG')
+    target_vector = target_driver.Create(
+        target_sample_point_path, 0, 0, 0, gdal.GDT_Unknown)
+    layer_name = os.path.splitext(os.path.basename(
+        target_sample_point_path))[0]
+    target_layer = target_vector.CreateLayer(
+        layer_name, point_layer.GetSpatialRef(), ogr.wkbPoint)
+
+    target_layer.CreateField(ogr.FieldDefn('OBJECTID', ogr.OFTInteger))
+    target_layer.CreateField(ogr.FieldDefn('N_export', ogr.OFTReal))
+    feature_defn = target_layer.GetLayerDefn()
     for point_feature in point_layer:
         point_geom = point_feature.GetGeometryRef()
         point_shapely = shapely.wkb.loads(point_geom.ExportToWkb())
@@ -128,6 +141,11 @@ def sample_points(
             watershed_basename = watershed_list[0].basename
             fid = watershed_list[0].fid
             LOGGER.debug('%s: %d', watershed_basename, fid)
+            feature = ogr.Feature(feature_defn)
+            feature.SetGeometry(point_geom.Clone())
+            feature.SetField('OBJECTID', point_feature.GetField('OBJECTID'))
+            target_layer.CreateFeature(feature)
+            feature = None
         else:
             LOGGER.debug('no watershed found')
 
@@ -160,7 +178,7 @@ if __name__ == '__main__':
         task_name='download and unzip watersheds')
 
     subraster_to_sample_path = None
-    target_sample_point_path = os.path.join(
+    target_sample_point_path = '%s.gpkg' % os.path.join(
         WORKSPACE_DIR, os.path.splitext(os.path.basename(args.point_path))[0])
     sample_points_task = task_graph.add_task(
         func=sample_points,
