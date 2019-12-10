@@ -84,7 +84,6 @@ def build_watershed_r_tree(watershed_dir_path):
             shapely_geom.basename = watershed_id
             shapely_geom.fid = watershed_feature.GetFID()
             shapely_geometry_list.append(shapely_geom)
-        break
     LOGGER.debug('building r-tree')
     r_tree = shapely.strtree.STRtree(shapely_geometry_list)
     return r_tree
@@ -194,14 +193,15 @@ def sample_points(
         point_geom = point_feature.GetGeometryRef()
         point_shapely = shapely.wkb.loads(point_geom.ExportToWkb())
         watershed_list = r_tree.query(point_shapely)
-        if not watershed_list:
-            LOGGER.debug('no watershed found')
-            continue
+        watershed_basename = None
         for watershed in watershed_list:
             if watershed.intersects(point_shapely):
                 watershed_basename = watershed.basename
                 fid = watershed.fid
                 break
+        if watershed_basename is None:
+            LOGGER.debug('no watershed found')
+            continue
         cursor.execute(
             'SELECT workspace_url from job_status '
             'where watershed_basename=? and fid=?', (
@@ -241,7 +241,14 @@ def sample_points(
                 dependent_task_list=[download_workspace_task],
                 target_path_list=[buffer_vector_path])
             create_local_buffer_region_task.join()
-            break
+            buffer_vector = gdal.OpenEx(buffer_vector_path, gdal.OF_VECTOR)
+            buffer_layer = buffer_vector.GetLayer()
+            buffer_feature = next(iter(buffer_layer))
+            n_export_sum = buffer_feature.GetField('sum')
+            feature.SetField('N_export', n_export_sum)
+            buffer_feature = None
+            buffer_layer = None
+            buffer_vector = None
         target_layer.CreateFeature(feature)
         feature = None
 
