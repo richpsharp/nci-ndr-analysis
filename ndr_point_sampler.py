@@ -265,7 +265,8 @@ if __name__ == '__main__':
             pass
 
     parser = argparse.ArgumentParser(description='NDR Point Sampler.')
-    parser.add_argument('point_path', type=str, help='path to point shapefile')
+    parser.add_argument(
+        'point_path', type=str, nargs='+', help='path to point shapefile')
     args = parser.parse_args()
 
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
@@ -284,17 +285,20 @@ if __name__ == '__main__':
         target_path_list=[watersheds_done_token_path],
         task_name='download and unzip watersheds')
 
-    subraster_to_sample_path = None
-    target_sample_point_path = '%s.gpkg' % os.path.join(
-        WORKSPACE_DIR, os.path.splitext(os.path.basename(args.point_path))[0])
-    sample_points_task = task_graph.add_task(
-        func=sample_points,
-        args=(
-            args.point_path, R_TREE_PICKLE_PATH,
-            subraster_to_sample_path,
-            NDR_WATERSHED_DATABASE_PATH, target_sample_point_path),
-        target_path_list=[target_sample_point_path],
-        task_name='sample points')
+    for point_path_pattern in args.point_path:
+        for point_path in glob.glob(point_path_pattern):
+            subraster_to_sample_path = None
+            target_sample_point_path = '%s.gpkg' % os.path.join(
+                WORKSPACE_DIR, os.path.splitext(os.path.basename(
+                    point_path))[0])
+            sample_points_task = task_graph.add_task(
+                func=sample_points,
+                args=(
+                    point_path, R_TREE_PICKLE_PATH,
+                    subraster_to_sample_path,
+                    NDR_WATERSHED_DATABASE_PATH, target_sample_point_path),
+                target_path_list=[target_sample_point_path],
+                task_name='sample points')
 
     task_graph.join()
     task_graph.close()
