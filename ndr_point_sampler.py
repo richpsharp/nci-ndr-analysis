@@ -199,56 +199,76 @@ def sample_points(
                 watershed_basename = watershed.basename
                 fid = watershed.fid
                 break
+        feature = ogr.Feature(feature_defn)
+        feature.SetGeometry(point_geom.Clone())
+        feature.SetField('OBJECTID', point_feature.GetField('OBJECTID'))
+        feature.SetField('basinid', fid)
+
         if watershed_basename is None:
             LOGGER.debug('no watershed found')
+            feature.SetField('N_export', -2222)
+            target_layer.CreateFeature(feature)
+            feature = None
             continue
         cursor.execute(
             'SELECT workspace_url from job_status '
             'where watershed_basename=? and fid=?', (
                 watershed_basename, fid))
-        workspace_url = cursor.fetchone()[0]
-        feature = ogr.Feature(feature_defn)
-        feature.SetGeometry(point_geom.Clone())
-        feature.SetField('OBJECTID', point_feature.GetField('OBJECTID'))
-        feature.SetField('basinid', fid)
+        payload = cursor.fetchone()
+        if not payload:
+            LOGGER.debug('%s_%d not in database', watershed_basename, fid)
+            LOGGER.error(
+                '%s %d: has no workspace', watershed_basename, fid)
+            feature.SetField('N_export', -1111)
+            target_layer.CreateFeature(feature)
+            feature = None
+            continue
+
+        workspace_url = payload[0]
         if workspace_url is None:
             LOGGER.error(
                 '%s %d: has no workspace', watershed_basename, fid)
             feature.SetField('N_export', -9999)
-        else:
-            workspace_url = workspace_url.replace(
-                'watershed_workspaces//', 'watershed_workspaces/')
-            LOGGER.info('%s %d: %s', watershed_basename, fid, workspace_url)
-            raster_to_sample_path = os.path.join(
-                WATERSHED_WORKSPACE_DIR, 'workspace_worker',
-                '%s_%d' % (watershed_basename, fid), 'n_export.tif')
+            target_layer.CreateFeature(feature)
+            feature = None
+            continue
 
-            watershed_workspace_token_path = os.path.join(
-                CHURN_DIR, '%s_%d.UNZIPPED' % (watershed_basename, fid))
-            download_workspace_task = task_graph.add_task(
-                func=download_and_unzip,
-                args=(workspace_url, WATERSHED_WORKSPACE_DIR,
-                      watershed_workspace_token_path),
-                target_path_list=[watershed_workspace_token_path],
-                task_name='download and unzip watersheds')
+        # I made a mistake in the creation of the database where I had an
+        # extra / on the url. This is a hack to replace it without changing
+        # the whole database.
+        workspace_url = workspace_url.replace(
+            'watershed_workspaces//', 'watershed_workspaces/')
+        LOGGER.info('%s %d: %s', watershed_basename, fid, workspace_url)
+        raster_to_sample_path = os.path.join(
+            WATERSHED_WORKSPACE_DIR, 'workspace_worker',
+            '%s_%d' % (watershed_basename, fid), 'n_export.tif')
 
-            buffer_vector_path = os.path.join(
-                os.path.dirname(raster_to_sample_path), 'buffer.gpkg')
-            create_local_buffer_region_task = task_graph.add_task(
-                func=create_local_buffer_region,
-                args=(raster_to_sample_path, point_geom.ExportToWkt(),
-                      buffer_vector_path),
-                dependent_task_list=[download_workspace_task],
-                target_path_list=[buffer_vector_path])
-            create_local_buffer_region_task.join()
-            buffer_vector = gdal.OpenEx(buffer_vector_path, gdal.OF_VECTOR)
-            buffer_layer = buffer_vector.GetLayer()
-            buffer_feature = next(iter(buffer_layer))
-            n_export_sum = buffer_feature.GetField('sum')
-            feature.SetField('N_export', n_export_sum)
-            buffer_feature = None
-            buffer_layer = None
-            buffer_vector = None
+        watershed_workspace_token_path = os.path.join(
+            CHURN_DIR, '%s_%d.UNZIPPED' % (watershed_basename, fid))
+        download_workspace_task = task_graph.add_task(
+            func=download_and_unzip,
+            args=(workspace_url, WATERSHED_WORKSPACE_DIR,
+                  watershed_workspace_token_path),
+            target_path_list=[watershed_workspace_token_path],
+            task_name='download and unzip watersheds')
+
+        buffer_vector_path = os.path.join(
+            os.path.dirname(raster_to_sample_path), 'buffer.gpkg')
+        create_local_buffer_region_task = task_graph.add_task(
+            func=create_local_buffer_region,
+            args=(raster_to_sample_path, point_geom.ExportToWkt(),
+                  buffer_vector_path),
+            dependent_task_list=[download_workspace_task],
+            target_path_list=[buffer_vector_path])
+        create_local_buffer_region_task.join()
+        buffer_vector = gdal.OpenEx(buffer_vector_path, gdal.OF_VECTOR)
+        buffer_layer = buffer_vector.GetLayer()
+        buffer_feature = next(iter(buffer_layer))
+        n_export_sum = buffer_feature.GetField('sum')
+        feature.SetField('N_export', n_export_sum)
+        buffer_feature = None
+        buffer_layer = None
+        buffer_vector = None
         target_layer.CreateFeature(feature)
         feature = None
 
