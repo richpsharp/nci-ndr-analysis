@@ -510,14 +510,13 @@ def schedule_worker(watershed_fid_list):
     try:
         LOGGER.debug('launching schedule_worker')
         LOGGER.debug(watershed_fid_list)
-        watershed_fid_tuple_list = [
-            re.match('(.*)_(\d+)', x).groups()
+        payload_list = [
+            re.match('(.*)_(\d+)', x).groups() + (1.0, )
             for x in watershed_fid_list]
-        LOGGER.debug(
-            'this is the watershed fid tuple list: %s',
-            watershed_fid_tuple_list)
+        LOGGER.debug('this is the payload_list: %s', payload_list)
 
-        if watershed_fid_tuple_list is []:
+        watershed_fid_tuple_list = []
+        if payload_list is []:
             ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
             LOGGER.debug('opening %s', ro_uri)
             connection = sqlite3.connect(ro_uri, uri=True)
@@ -527,7 +526,6 @@ def schedule_worker(watershed_fid_list):
                 'SELECT watershed_basename, fid, watershed_area_deg '
                 'FROM job_status '
                 'WHERE job_status=\'PRESCHEDULED\'')
-            watershed_fid_tuple_list = []
             total_expected_runtime = 0.0
             payload_list = list(cursor.fetchall())
             connection.commit()
@@ -535,7 +533,8 @@ def schedule_worker(watershed_fid_list):
         else:
             LOGGER.debug(
                 'running in immediate mode for these watersheds: %s',
-                watershed_fid_tuple_list)
+                payload_list)
+
         for payload in payload_list:
             watershed_basename, fid, watershed_area_deg = payload
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
