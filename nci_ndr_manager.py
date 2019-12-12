@@ -13,6 +13,7 @@ import logging
 import os
 import pathlib
 import queue
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -493,8 +494,14 @@ def job_status_updater():
 
 
 @retrying.retry()
-def schedule_worker():
+def schedule_worker(watershed_fid_list):
     """Monitors STATUS_DATABASE_PATH and schedules work.
+
+    Parameters:
+        watershed_fid_list (tuple): If not `None` this funciton will
+            execute NDR on the `watershed_basename_fid` strings in this list.
+            If `None` this function will loop through the uncompleted
+            watershed/fid tuples in the database until complete.
 
     Returns:
         None.
@@ -502,20 +509,33 @@ def schedule_worker():
     """
     try:
         LOGGER.debug('launching schedule_worker')
-        ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
-        LOGGER.debug('opening %s', ro_uri)
-        connection = sqlite3.connect(ro_uri, uri=True)
-        cursor = connection.cursor()
-        LOGGER.debug('querying prescheduled')
-        cursor.execute(
-            'SELECT watershed_basename, fid, watershed_area_deg '
-            'FROM job_status '
-            'WHERE job_status=\'PRESCHEDULED\'')
-        watershed_fid_tuple_list = []
-        total_expected_runtime = 0.0
-        payload_list = list(cursor.fetchall())
-        connection.commit()
-        connection.close()
+        LOGGER.debug(watershed_fid_list)
+        watershed_fid_tuple_list = [
+            re.match('(.*)_(\d+)', x).groups()
+            for x in watershed_fid_list]
+        LOGGER.debug(
+            'this is the watershed fid tuple list: %s',
+            watershed_fid_tuple_list)
+
+        if watershed_fid_tuple_list is []:
+            ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
+            LOGGER.debug('opening %s', ro_uri)
+            connection = sqlite3.connect(ro_uri, uri=True)
+            cursor = connection.cursor()
+            LOGGER.debug('querying prescheduled')
+            cursor.execute(
+                'SELECT watershed_basename, fid, watershed_area_deg '
+                'FROM job_status '
+                'WHERE job_status=\'PRESCHEDULED\'')
+            watershed_fid_tuple_list = []
+            total_expected_runtime = 0.0
+            payload_list = list(cursor.fetchall())
+            connection.commit()
+            connection.close()
+        else:
+            LOGGER.debug(
+                'running in immediate mode for these watersheds: %s',
+                watershed_fid_tuple_list)
         for payload in payload_list:
             watershed_basename, fid, watershed_area_deg = payload
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
@@ -910,6 +930,9 @@ def download_url(source_url, target_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
+        '--watershed_fid_immedates', type=str, nargs='+', default=None,
+        help='list of `watershed_fid` identifiers to run instead of database')
+    parser.add_argument(
         '--app_port', type=int, default=8080,
         help='port to listen on for callback complete')
     parser.add_argument(
@@ -925,7 +948,8 @@ if __name__ == '__main__':
     worker_status_monitor_thread.start()
 
     schedule_worker_thread = threading.Thread(
-        target=schedule_worker)
+        target=schedule_worker,
+        args=(args.watershed_fid_immedates,))
     schedule_worker_thread.start()
 
     new_host_monitor_thread = threading.Thread(
@@ -940,9 +964,9 @@ if __name__ == '__main__':
         target=reschedule_worker)
     reschedule_worker_thread.start()
 
-    stitch_worker_process = threading.Thread(
-        target=stitch_worker)
-    stitch_worker_process.start()
+    # stitch_worker_process = threading.Thread(
+    #     target=stitch_worker)
+    # stitch_worker_process.start()
 
     START_TIME = time.time()
     ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
