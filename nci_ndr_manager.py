@@ -429,6 +429,7 @@ def processing_status():
                 uptime_str,
                 active_count, ready_count))
         with GLOBAL_LOCK:
+            result_string += 'what\'s running:<br>'
             for session_id, payload in sorted(SCHEDULED_MAP.items()):
                 result_string += '* %s running %d watersheds (%s)<br>' % (
                     payload['host'], len(payload['watershed_fid_tuple_list']),
