@@ -494,13 +494,13 @@ def job_status_updater():
 
 
 @retrying.retry()
-def schedule_worker(watershed_fid_list):
+def schedule_worker(immediate_watershed_fid_list):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
-        watershed_fid_list (tuple): If not `None` this funciton will
-            execute NDR on the `watershed_basename_fid` strings in this list.
-            If `None` this function will loop through the uncompleted
+        immediate_watershed_fid_list (tuple): If not `None` this funciton will
+            execute NDR only on the `watershed_basename_fid` strings in this
+            list. If `None` this function will loop through the uncompleted
             watershed/fid tuples in the database until complete.
 
     Returns:
@@ -509,15 +509,8 @@ def schedule_worker(watershed_fid_list):
     """
     try:
         LOGGER.debug('launching schedule_worker')
-        LOGGER.debug(watershed_fid_list)
-        payload_list = [
-            re.match('(.*)_(\d+)', x).groups() + (1.0, )
-            for x in watershed_fid_list]
-        LOGGER.debug('this is the payload_list: %s', payload_list)
-
-        watershed_fid_tuple_list = []
-        total_expected_runtime = 0.0
-        if payload_list is []:
+        if not immediate_watershed_fid_list:
+            LOGGER.debug('no predefined watershed fid, use database')
             ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
             LOGGER.debug('opening %s', ro_uri)
             connection = sqlite3.connect(ro_uri, uri=True)
@@ -531,9 +524,17 @@ def schedule_worker(watershed_fid_list):
             connection.commit()
             connection.close()
         else:
+            # hard-coding a 1.0 because we don't really know how big the
+            # watershed is if it's passed as an immediate.
+            payload_list = [
+                re.match('(.*)_(\d+)', x).groups() + (1.0, )
+                for x in immediate_watershed_fid_list]
             LOGGER.debug(
                 'running in immediate mode for these watersheds: %s',
                 payload_list)
+
+        watershed_fid_tuple_list = []
+        total_expected_runtime = 0.0
 
         for payload in payload_list:
             watershed_basename, fid, watershed_area_deg = payload
