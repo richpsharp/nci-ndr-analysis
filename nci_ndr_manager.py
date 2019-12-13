@@ -80,6 +80,7 @@ WGS84_WKT = WGS84_SR.ExportToWkt()
 WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
+MAX_TO_SEND_TO_WORKER = 1000
 GLOBAL_STITCH_MAP = {
     'n_export': (
         'workspace_worker/[BASENAME]_[FID]/n_export.tif',
@@ -542,7 +543,8 @@ def schedule_worker(immediate_watershed_fid_list):
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
-            if total_expected_runtime > TIME_PER_WORKER:
+            if total_expected_runtime > TIME_PER_WORKER or (
+                    len(watershed_fid_tuple_list) > MAX_TO_SEND_TO_WORKER):
                 LOGGER.debug(
                     'sending job with %d elements %.2f min time',
                     len(watershed_fid_tuple_list), total_expected_runtime/60)
@@ -939,7 +941,14 @@ if __name__ == '__main__':
     parser.add_argument(
         '--external_ip', type=str, default='localhost',
         help='define external IP that can be used to connect to this app')
+    parser.add_argument(
+        '--max_to_send_to_worker', type=int, default=MAX_TO_SEND_TO_WORKER,
+        help='maximum number of jobs to send to each worker, default is %s.' % (
+            MAX_TO_SEND_TO_WORKER))
     args = parser.parse_args()
+
+    global MAX_TO_SEND_TO_WORKER
+    MAX_TO_SEND_TO_WORKER = args.max_to_send_to_worker
 
     initialize()
     create_index(STATUS_DATABASE_PATH)
