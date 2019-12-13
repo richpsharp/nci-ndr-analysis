@@ -414,6 +414,7 @@ def processing_status():
         result_string = (
             'percent complete: %.2f%% (%d)<br>'
             'total to process: %d<br>'
+            'total left to process: %d<br>'
             'percent stitched: %.2f%% (%d)<br>'
             'approx time left: %s<br>'
             'processing %.2f watersheds every second<br>'
@@ -421,7 +422,7 @@ def processing_status():
             'active workers: %d<br>'
             'ready workers: %d<br>' % (
                 processed_count/total_count*100, processed_count,
-                total_count,
+                total_count, total_count - processed_count,
                 stitched_count/total_count*100, stitched_count,
                 approx_time_left_str,
                 processing_rate,
@@ -495,7 +496,7 @@ def job_status_updater():
 
 
 @retrying.retry()
-def schedule_worker(immediate_watershed_fid_list):
+def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
@@ -503,6 +504,9 @@ def schedule_worker(immediate_watershed_fid_list):
             execute NDR only on the `watershed_basename_fid` strings in this
             list. If `None` this function will loop through the uncompleted
             watershed/fid tuples in the database until complete.
+        max_to_send_to_worker (int): maximum number of watersheds to send to
+            each worker. Otherwise tries to schedule up to 10 minutes of
+            computation per worker based on watershed size.
 
     Returns:
         None.
@@ -544,7 +548,7 @@ def schedule_worker(immediate_watershed_fid_list):
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
             if total_expected_runtime > TIME_PER_WORKER or (
-                    len(watershed_fid_tuple_list) > MAX_TO_SEND_TO_WORKER):
+                    len(watershed_fid_tuple_list) > max_to_send_to_worker):
                 LOGGER.debug(
                     'sending job with %d elements %.2f min time',
                     len(watershed_fid_tuple_list), total_expected_runtime/60)
@@ -947,7 +951,6 @@ if __name__ == '__main__':
             MAX_TO_SEND_TO_WORKER))
     args = parser.parse_args()
 
-    global MAX_TO_SEND_TO_WORKER
     MAX_TO_SEND_TO_WORKER = args.max_to_send_to_worker
 
     initialize()
@@ -959,7 +962,8 @@ if __name__ == '__main__':
 
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
-        args=(args.watershed_fid_immedates,))
+        args=(
+            args.watershed_fid_immedates, args.max_to_send_to_worker))
     schedule_worker_thread.start()
 
     new_host_monitor_thread = threading.Thread(
