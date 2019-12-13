@@ -537,6 +537,7 @@ def schedule_worker(watershed_fid_list):
 
         for payload in payload_list:
             watershed_basename, fid, watershed_area_deg = payload
+            fid = int(fid)  # I encountered a string, this prevents that.
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
             watershed_fid_tuple_list.append(
                 (watershed_basename, fid, watershed_area_deg))
