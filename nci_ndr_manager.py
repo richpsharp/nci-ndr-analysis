@@ -428,6 +428,13 @@ def processing_status():
                 processing_rate,
                 uptime_str,
                 active_count, ready_count))
+        with GLOBAL_LOCK:
+            for session_id, payload in sorted(SCHEDULED_MAP.items()):
+                result_string += '* %s running %d watersheds (%s)<br>' % (
+                    payload['host'], len(payload['watershed_fid_tuple_list']),
+                    session_id)
+                for ws_fid_tuple in payload['watershed_fid_tuple_list']:
+                    result_string += '&emsp;&emsp;-%s<br>' % str(ws_fid_tuple)
         return result_string
     except Exception as e:
         return 'error: %s' % str(e)
