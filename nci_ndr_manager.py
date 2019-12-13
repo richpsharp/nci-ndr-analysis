@@ -80,7 +80,7 @@ WGS84_WKT = WGS84_SR.ExportToWkt()
 WORKER_TAG_ID = 'compute-server'
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/watershed_workspaces'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
-MAX_TO_SEND_TO_WORKER = 1000
+DEFAULT_MAX_TO_SEND_TO_WORKER = 100
 GLOBAL_STITCH_MAP = {
     'n_export': (
         'workspace_worker/[BASENAME]_[FID]/n_export.tif',
@@ -946,12 +946,11 @@ if __name__ == '__main__':
         '--external_ip', type=str, default='localhost',
         help='define external IP that can be used to connect to this app')
     parser.add_argument(
-        '--max_to_send_to_worker', type=int, default=MAX_TO_SEND_TO_WORKER,
+        '--max_to_send_to_worker', type=int,
+        default=DEFAULT_MAX_TO_SEND_TO_WORKER,
         help='maximum number of jobs to send to each worker, default is %s.' % (
-            MAX_TO_SEND_TO_WORKER))
+            DEFAULT_MAX_TO_SEND_TO_WORKER))
     args = parser.parse_args()
-
-    MAX_TO_SEND_TO_WORKER = args.max_to_send_to_worker
 
     initialize()
     create_index(STATUS_DATABASE_PATH)
