@@ -396,7 +396,7 @@ def processing_status():
 
         uptime = time.time() - START_TIME
         hours = uptime // 3600
-        minutes = (uptime - hours*60) / 60
+        minutes = (uptime - hours*3600) // 60
         seconds = uptime % 60
         uptime_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
@@ -407,7 +407,7 @@ def processing_status():
         else:
             approx_time_left = 999999999
         hours = approx_time_left // 3600
-        minutes = (approx_time_left - hours*60) / 60
+        minutes = (approx_time_left - hours*3600) / 60
         seconds = approx_time_left % 60
         approx_time_left_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
