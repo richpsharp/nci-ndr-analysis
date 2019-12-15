@@ -852,16 +852,16 @@ def stitch_worker():
 
     # This section can be uncommented for debugging in the case of wanting to
     # reset all the stitched rasters
-    # connection = sqlite3.connect(STATUS_DATABASE_PATH)
-    # cursor = connection.cursor()
-    # update_stiched_record = (
-    #     'UPDATE job_status '
-    #     'SET stiched_n_export=0, stiched_modified_load=0 '
-    #     'WHERE stiched_n_export=1 OR stiched_modified_load=1')
-    # cursor.execute(update_stiched_record)
-    # connection.commit()
-    # connection.close()
-    # cursor = None
+    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+    cursor = connection.cursor()
+    update_stiched_record = (
+        'UPDATE job_status '
+        'SET stiched_n_export=0, stiched_modified_load=0 '
+        'WHERE stiched_n_export=1 OR stiched_modified_load=1')
+    cursor.execute(update_stiched_record)
+    connection.commit()
+    connection.close()
+    cursor = None
 
     while True:
         # update the stitch with the latest.
@@ -985,9 +985,9 @@ if __name__ == '__main__':
         target=reschedule_worker)
     reschedule_worker_thread.start()
 
-    # stitch_worker_process = threading.Thread(
-    #     target=stitch_worker)
-    # stitch_worker_process.start()
+    stitch_worker_process = threading.Thread(
+        target=stitch_worker)
+    stitch_worker_process.start()
 
     START_TIME = time.time()
     ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)

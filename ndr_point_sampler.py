@@ -22,7 +22,7 @@ ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 NDR_WATERSHED_DATABASE_URL = (
     'https://storage.googleapis.com/ipbes-ndr-ecoshard-data/'
-    'ndr_global_run_database_md5_fa32958c7024e8e93d067ecfd0c4d419.sqlite3')
+    'ndr_global_run_database_md5_e8ebcad9ece27f6b08b7d58708614d62.sqlite3')
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'watersheds_globe_HydroSHEDS_15arcseconds_'
