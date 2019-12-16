@@ -245,7 +245,7 @@ def unzip_file(zip_path, target_directory, token_file):
         token_file.write(str(datetime.datetime.now()))
 
 
-@retrying.retry()
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def create_index(database_path):
     """Create an index on the database if it doesn't exist."""
     try:
