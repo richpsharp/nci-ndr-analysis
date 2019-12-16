@@ -22,7 +22,7 @@ if __name__ == '__main__':
     cursor = connection.cursor()
     cursor.executemany(
         'UPDATE job_status '
-        'SET workspace_url='', job_status=\'PRESCHEDULED\' '
+        'SET workspace_url=\'\', job_status=\'PRESCHEDULED\' '
         'WHERE watershed_basename=? AND fid=?',
         watershed_fid_list)
     connection.commit()
