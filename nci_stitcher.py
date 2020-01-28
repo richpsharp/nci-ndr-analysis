@@ -76,9 +76,9 @@ def make_empty_wgs84_raster(
 if __name__ == '__main__':
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
     raster_path_base_list = [
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/n_export.tif',
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/intermediate_outputs/modified_load_n.tif',
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID}/intermediate_outputs/stream.tif',
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/n_export.tif',
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
+        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
         ]
     for raster_path_pattern in raster_path_base_list:
         global_raster_path = os.path.join(WORKSPACE_DIR, os.path.basename(
@@ -92,8 +92,6 @@ if __name__ == '__main__':
                 global_raster_path, target_token_complete_path),
             target_path_list=[target_token_complete_path],
             task_name='make empty %s' % os.path.basename(raster_path_pattern))
-
-
 
     task_graph.join()
     task_graph.close()
