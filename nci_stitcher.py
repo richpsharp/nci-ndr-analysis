@@ -192,8 +192,8 @@ if __name__ == '__main__':
         watershed_id = '%s_%d' % (basename, basin_id-1)
         LOGGER.debug(watershed_id)
         tdd_downloader.download_ecoshard(
-            watershed_id,
-            os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id))
+            os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
+            watershed_id)
 
     task_graph.join()
     task_graph.close()
