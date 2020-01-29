@@ -53,15 +53,15 @@ def make_empty_wgs84_raster(
         pass
 
     if not center_point:
-        n_cols = int(360.0 / cell_size)
-        n_rows = int(180.0 / cell_size)
-        geotransform = (-180.0, cell_size, 0.0, 90.0, 0, -cell_size)
+        n_cols = int(abs(360.0 / cell_size[0]))
+        n_rows = int(abs(180.0 / cell_size[1]))
+        geotransform = (-180.0, cell_size[0], 0.0, 90.0, 0, cell_size[1])
     else:
-        n_cols = int(buffer_range / cell_size)
-        n_rows = int(buffer_range / cell_size)
+        n_cols = int(abs(buffer_range / cell_size[0]))
+        n_rows = int(abs(buffer_range / cell_size[1]))
         geotransform = (
-            center_point[0]-buffer_range, cell_size,
-            0.0, center_point[1]+buffer_range, 0, -cell_size)
+            center_point[0]-buffer_range, cell_size[0],
+            0.0, center_point[1]+buffer_range, 0, cell_size[1])
 
     target_raster = gtiff_driver.Create(
         target_raster_path, n_cols, n_rows, 1, target_datatype,
@@ -74,6 +74,7 @@ def make_empty_wgs84_raster(
     target_raster.SetGeoTransform(geotransform)
     target_band = target_raster.GetRasterBand(1)
     target_band.SetNoDataValue(nodata_value)
+    target_band.Fill(nodata_value)
     target_band = None
     target_raster = None
 
@@ -92,8 +93,8 @@ if __name__ == '__main__':
         ]
     for raster_path_pattern in raster_path_base_list:
         global_raster_path = os.path.join(
-            WORKSPACE_DIR, '%s_stitch.tif' % os.path.basename(
-                raster_path_pattern))
+            WORKSPACE_DIR, '%s_stitch%s' % os.path.splitext(os.path.basename(
+                raster_path_pattern)))
         target_token_complete_path = '%s.INITALIZED' % os.path.splitext(
             global_raster_path)[0]
         task_graph.add_task(
