@@ -15,6 +15,8 @@ import taskgraph_downloader_pnn
 WORKSPACE_DIR = 'nci_stitcher_workspace'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
 
+AWS_BASE_URL = (
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/watershed_workspaces/')
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -49,8 +51,9 @@ def build_strtree(vector_path_pattern):
             field which contains original fieldname/field type pairs
 
     """
-    geometry_prep_list = []
+    geometry_list = []
     for vector_path in glob.glob(vector_path_pattern):
+        basename = os.path.splitext(os.path.basename(vector_path))[0]
         vector = gdal.OpenEx(vector_path, gdal.OF_VECTOR)
         layer = vector.GetLayer()
         layer_defn = layer.GetLayerDefn()
@@ -67,18 +70,17 @@ def build_strtree(vector_path_pattern):
                     '%.2f%% complete in %s',
                     100.0 * index/layer.GetFeatureCount(),
                     vector_path)
-            feature_geom = feature.GetGeometryRef().Clone()
+            feature_geom = feature.GetGeometryRef()
             feature_geom_shapely = shapely.wkb.loads(feature_geom.ExportToWkb())
-            feature_geom_shapely.prep = shapely.prepared.prep(feature_geom_shapely)
-            feature_geom_shapely.geom = feature_geom
-            feature_geom_shapely.id = index
+            #feature_geom_shapely.prep = shapely.prepared.prep(feature_geom_shapely)
             feature_geom_shapely.field_val_map = {}
             for field_name, _ in field_name_type_list:
                 feature_geom_shapely.field_val_map[field_name] = (
                     feature.GetField(field_name))
-            geometry_prep_list.append(feature_geom_shapely)
+            feature_geom_shapely.field_val_map['BASENAME'] = basename
+            geometry_list.append(feature_geom_shapely)
     LOGGER.debug('constructing the tree')
-    r_tree = shapely.strtree.STRtree(geometry_prep_list)
+    r_tree = shapely.strtree.STRtree(geometry_list)
     LOGGER.debug('all done')
     r_tree.field_name_type_list = field_name_type_list
     return r_tree
@@ -175,7 +177,7 @@ if __name__ == '__main__':
                 WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
                 global_raster_path, target_token_complete_path),
             kwargs={
-                'center_point': query_point.coords,
+                'center_point': (query_point.x, query_point.y),
                 'buffer_range': buffer_range,
             },
             target_path_list=[target_token_complete_path],
@@ -185,7 +187,12 @@ if __name__ == '__main__':
         os.path.join(tdd_downloader.get_path('watersheds'), 'na*.shp'))
     aoi = query_point.buffer(buffer_range)
     for watershed_object in watershed_strtree.query(aoi):
-        LOGGER.debug(watershed_object.field_val_map['BASIN_ID'])
+        basin_id = watershed_object.field_val_map['BASIN_ID']
+        basename = watershed_object.field_val_map['BASENAME']
+        watershed_id = '%s_%d' % (basename, basin_id-1)
+        LOGGER.debug(watershed_id)
+        tdd_downloader.get_path(
+            os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id))
 
     task_graph.join()
     task_graph.close()
