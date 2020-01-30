@@ -15,6 +15,7 @@ import taskgraph_downloader_pnn
 
 WORKSPACE_DIR = 'nci_stitcher_workspace'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
+WARP_DIR = os.path.join(WORKSPACE_DIR, 'warped_rasters')
 
 AWS_BASE_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/watershed_workspaces/')
@@ -123,8 +124,8 @@ def make_empty_wgs84_raster(
         n_rows = int(abs(180.0 / cell_size[1]))
         geotransform = (-180.0, cell_size[0], 0.0, 90.0, 0, cell_size[1])
     else:
-        n_cols = int(abs(buffer_range / cell_size[0]))
-        n_rows = int(abs(buffer_range / cell_size[1]))
+        n_cols = int(abs(2*buffer_range / cell_size[0]))
+        n_rows = int(abs(2*buffer_range / cell_size[1]))
         geotransform = (
             center_point[0]-buffer_range, cell_size[0],
             0.0, center_point[1]+buffer_range, 0, cell_size[1])
@@ -151,6 +152,11 @@ def make_empty_wgs84_raster(
 
 
 if __name__ == '__main__':
+    try:
+        os.makedirs(WARP_DIR)
+    except OSError:
+        pass
+
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
     tdd_downloader = taskgraph_downloader_pnn.TaskGraphDownloader(
         ECOSHARD_DIR, task_graph)
@@ -166,13 +172,14 @@ if __name__ == '__main__':
         ]
     query_point = shapely.geometry.Point(-117, 38)
     buffer_range = 1.0
+    global_raster_info_map = {}
     for raster_path_pattern in raster_path_base_list:
         global_raster_path = os.path.join(
             WORKSPACE_DIR, '%s_stitch%s' % os.path.splitext(os.path.basename(
                 raster_path_pattern)))
         target_token_complete_path = '%s.INITALIZED' % os.path.splitext(
             global_raster_path)[0]
-        task_graph.add_task(
+        make_empty_task = task_graph.add_task(
             func=make_empty_wgs84_raster,
             args=(
                 WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
@@ -183,10 +190,19 @@ if __name__ == '__main__':
             },
             target_path_list=[target_token_complete_path],
             task_name='make empty %s' % os.path.basename(raster_path_pattern))
+        make_empty_task.join()
+        global_raster_info_map[raster_path_pattern] = (
+            gdal.OpenEx(global_raster_path, gdal.OF_RASTER),
+            pygeoprocessing.get_raster_info(global_raster_path))
 
     watershed_strtree = build_strtree(
         os.path.join(tdd_downloader.get_path('watersheds'), 'na*.shp'))
-    aoi = query_point.buffer(buffer_range)
+    aoi = shapely.geometry.box(
+        query_point.x - buffer_range,
+        query_point.y - buffer_range,
+        query_point.x + buffer_range,
+        query_point.y + buffer_range)
+    query_point.buffer(buffer_range)
     for watershed_object in watershed_strtree.query(aoi):
         basin_id = watershed_object.field_val_map['BASIN_ID']
         basename = watershed_object.field_val_map['BASENAME']
@@ -198,9 +214,46 @@ if __name__ == '__main__':
             local_path='workspace_worker/%s' % watershed_id)
 
         for raster_subpath in raster_path_base_list:
-            raster_info = pygeoprocessing.get_raster_info(os.path.join(
-                tdd_downloader.get_path(watershed_id), raster_subpath))
-            LOGGER.debug(raster_info)
+            global_raster, global_raster_info = global_raster_info_map[
+                raster_subpath]
+            global_inv_gt = gdal.InvGeoTransform(
+                global_raster_info['geotransform'])
+            stitch_raster_path = os.path.join(
+                tdd_downloader.get_path(watershed_id), raster_subpath)
+            stitch_raster_info = pygeoprocessing.get_raster_info(
+                stitch_raster_path)
+            warp_raster_path = os.path.join(
+                WORKSPACE_DIR, os.path.basename(stitch_raster_path))
+
+            warp_task = task_graph.add_task(
+                func=pygeoprocessing.warp_raster,
+                args=(
+                    stitch_raster_path, global_raster_info['pixel_size'],
+                    warp_raster_path, 'near'),
+                kwargs={'target_sr_wkt': global_raster_info['projection']},
+                target_path_list=[warp_raster_path],
+                task_name='warp %s' % stitch_raster_path)
+            warp_task.join()
+            warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
+            warp_bb = warp_info['bounding_box']
+                # bounding_box' [minx, miny, maxx, maxy]
+
+            global_i_min, global_j_min = gdal.ApplyGeoTransform(
+                global_inv_gt, warp_bb[0], warp_bb[1])
+            global_i_max, global_j_max = gdal.ApplyGeoTransform(
+                global_inv_gt, warp_bb[2], warp_bb[3])
+            if global_i_min > global_i_max:
+                global_i_max, global_i_min = global_i_min, global_i_max
+            if global_j_min > global_j_max:
+                global_j_max, global_j_min = global_j_min, global_j_max
+            if (global_i_min >= global_raster.RasterXSize or
+                    global_j_min >= global_raster.RasterYSize or
+                    global_i_max < 0 or global_j_max < 0):
+                LOGGER.debug(stitch_raster_info)
+                raise ValueError(
+                    '%f %f %f %f out of bounds (%d, %d)', global_i_min, global_j_min,
+                    global_i_max, global_j_max, global_raster.RasterXSize,
+                    global_raster.RasterYSize)
 
     task_graph.join()
     task_graph.close()
