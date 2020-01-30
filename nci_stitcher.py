@@ -242,10 +242,10 @@ if __name__ == '__main__':
 
             # recall that y goes down as j goes up, so min y is max j
             global_i_min, global_j_max = [
-                int(x) for x in gdal.ApplyGeoTransform(
+                int(round(x)) for x in gdal.ApplyGeoTransform(
                     global_inv_gt, warp_bb[0], warp_bb[1])]
             global_i_max, global_j_min = [
-                int(x) for x in gdal.ApplyGeoTransform(
+                int(round(x)) for x in gdal.ApplyGeoTransform(
                     global_inv_gt, warp_bb[2], warp_bb[3])]
             if (global_i_min >= global_raster.RasterXSize or
                     global_j_min >= global_raster.RasterYSize or
