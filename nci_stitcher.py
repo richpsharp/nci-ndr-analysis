@@ -6,6 +6,7 @@ import sys
 
 from osgeo import gdal
 from osgeo import osr
+import pygeoprocessing
 import shapely.geometry
 import shapely.strtree
 import shapely.wkt
@@ -159,9 +160,9 @@ if __name__ == '__main__':
         local_path='watersheds_globe_HydroSHEDS_15arcseconds')
 
     raster_path_base_list = [
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/n_export.tif',
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/intermediate_outputs/modified_load_n.tif',
-        '[BASENAME]/workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
+        'n_export.tif',
+        'intermediate_outputs/modified_load_n.tif',
+        'intermediate_outputs/stream.tif',
         ]
     query_point = shapely.geometry.Point(-117, 38)
     buffer_range = 1.0
@@ -193,7 +194,13 @@ if __name__ == '__main__':
         LOGGER.debug(watershed_id)
         tdd_downloader.download_ecoshard(
             os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
-            watershed_id)
+            watershed_id, decompress='unzip',
+            local_path='workspace_worker/%s' % watershed_id)
+
+        for raster_subpath in raster_path_base_list:
+            raster_info = pygeoprocessing.get_raster_info(os.path.join(
+                tdd_downloader.get_path(watershed_id), raster_subpath))
+            LOGGER.debug(raster_info)
 
     task_graph.join()
     task_graph.close()
