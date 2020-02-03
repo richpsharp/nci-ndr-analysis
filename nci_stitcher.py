@@ -232,6 +232,9 @@ if __name__ == '__main__':
         watershed_layer_map[watershed_basename] = watershed_path
 
     feature_index = 0
+
+    missing_watershed_file = open(
+        'missing_watersheds.txt', 'w', buffer=1)
     for watershed_basename, watershed_path in watershed_layer_map.items():
         LOGGER.info('processing %s', watershed_basename)
         watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
@@ -249,7 +252,9 @@ if __name__ == '__main__':
                     watershed_id, decompress='unzip',
                     local_path='workspace_worker/%s' % watershed_id)
             except urllib.error.HTTPError:
-                pass  # probably not a workspace we processed
+                # probably not a workspace we processed
+                missing_watershed_file.write('%s\n' % watershed_id)
+                continue
 
             for raster_subpath in raster_path_base_list:
                 global_raster, global_raster_info, _ = global_raster_info_map[
@@ -354,3 +359,4 @@ if __name__ == '__main__':
 
     task_graph.join()
     task_graph.close()
+    missing_watershed_file.close()
