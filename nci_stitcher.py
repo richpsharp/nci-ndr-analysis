@@ -213,8 +213,9 @@ if __name__ == '__main__':
             pygeoprocessing.get_raster_info(global_raster_path),
             global_raster_path)
 
-    watershed_path_list = glob.glob(
-        os.path.join(tdd_downloader.get_path('watersheds'), '*.shp'))
+    watershed_path_list = list(glob.glob(
+        os.path.join(tdd_downloader.get_path('watersheds'), '*.shp')))
+    LOGGER.debug('this is the watershed_path_list: %s', watershed_path_list)
     watershed_layer_map = {}
     feature_total_count = 0
     for watershed_path in watershed_path_list:
