@@ -2,6 +2,7 @@
 import glob
 import logging
 import os
+import shutil
 import sys
 
 from osgeo import gdal
@@ -212,126 +213,130 @@ if __name__ == '__main__':
             pygeoprocessing.get_raster_info(global_raster_path),
             global_raster_path)
 
-    watershed_strtree = build_strtree(
-        os.path.join(tdd_downloader.get_path('watersheds'), 'na*.shp'))
-    aoi = shapely.geometry.box(
-        query_point.x - buffer_range,
-        query_point.y - buffer_range,
-        query_point.x + buffer_range,
-        query_point.y + buffer_range)
-    query_point.buffer(buffer_range)
-    for watershed_object in watershed_strtree.query(aoi):
-        basin_id = watershed_object.field_val_map['BASIN_ID']
-        basename = watershed_object.field_val_map['BASENAME']
-        watershed_id = '%s_%d' % (basename, basin_id-1)
-        LOGGER.debug(watershed_id)
-        tdd_downloader.download_ecoshard(
-            os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
-            watershed_id, decompress='unzip',
-            local_path='workspace_worker/%s' % watershed_id)
+    watershed_path_list = glob.glob(
+        os.path.join(tdd_downloader.get_path('watersheds'), '*.shp'))
+    watershed_layer_map = {}
+    feature_total_count = 0
+    for watershed_path in watershed_path_list:
+        watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
+        watershed_basename = (
+            os.path.basename(os.path.splitext(watershed_path)[0]))
+        watershed_layer = watershed_vector.GetLayer()
+        watershed_layer_map[watershed_basename] = watershed_layer
+        feature_total_count += watershed_layer.GetFeatureCount()
 
-        for raster_subpath in raster_path_base_list:
-            global_raster, global_raster_info, _ = global_raster_info_map[
-                raster_subpath]
-            global_band = global_raster.GetRasterBand(1)
-            global_inv_gt = gdal.InvGeoTransform(
-                global_raster_info['geotransform'])
-            stitch_raster_path = os.path.join(
-                tdd_downloader.get_path(watershed_id), raster_subpath)
-            stitch_raster_info = pygeoprocessing.get_raster_info(
-                stitch_raster_path)
-            warp_raster_path = os.path.join(
-                WARP_DIR, '%s_%s' % (
-                    watershed_id, os.path.basename(stitch_raster_path)))
-            warp_task = task_graph.add_task(
-                func=pygeoprocessing.warp_raster,
-                args=(
-                    stitch_raster_path, global_raster_info['pixel_size'],
-                    warp_raster_path, 'near'),
-                kwargs={'target_sr_wkt': global_raster_info['projection']},
-                target_path_list=[warp_raster_path],
-                task_name='warp %s' % stitch_raster_path)
-            warp_task.join()
-            warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
-            warp_bb = warp_info['bounding_box']
+    feature_index = 0
+    for watershed_basename, watershed_layer in watershed_layer_map.items():
+        for watershed_feature in watershed_layer:
+            feature_index += 1
+            if feature_index % 10000 == 0:
+                LOGGER.info(
+                    '%.2f%% complete', 100.0*feature_index/feature_total_count)
+            basin_id = watershed_feature.GetField('BASIN_ID')
+            watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
+            LOGGER.debug(watershed_id)
+            tdd_downloader.download_ecoshard(
+                os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
+                watershed_id, decompress='unzip',
+                local_path='workspace_worker/%s' % watershed_id)
 
-            # recall that y goes down as j goes up, so min y is max j
-            global_i_min, global_j_max = [
-                int(round(x)) for x in gdal.ApplyGeoTransform(
-                    global_inv_gt, warp_bb[0], warp_bb[1])]
-            global_i_max, global_j_min = [
-                int(round(x)) for x in gdal.ApplyGeoTransform(
-                    global_inv_gt, warp_bb[2], warp_bb[3])]
+            for raster_subpath in raster_path_base_list:
+                global_raster, global_raster_info, _ = global_raster_info_map[
+                    raster_subpath]
+                global_band = global_raster.GetRasterBand(1)
+                global_inv_gt = gdal.InvGeoTransform(
+                    global_raster_info['geotransform'])
+                stitch_raster_path = os.path.join(
+                    tdd_downloader.get_path(watershed_id), raster_subpath)
+                stitch_raster_info = pygeoprocessing.get_raster_info(
+                    stitch_raster_path)
+                warp_raster_path = os.path.join(
+                    WARP_DIR, '%s_%s' % (
+                        watershed_id, os.path.basename(stitch_raster_path)))
+                warp_task = task_graph.add_task(
+                    func=pygeoprocessing.warp_raster,
+                    args=(
+                        stitch_raster_path, global_raster_info['pixel_size'],
+                        warp_raster_path, 'near'),
+                    kwargs={'target_sr_wkt': global_raster_info['projection']},
+                    target_path_list=[warp_raster_path],
+                    task_name='warp %s' % stitch_raster_path)
+                warp_task.join()
+                warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
+                warp_bb = warp_info['bounding_box']
 
-            if (global_i_min >= global_raster.RasterXSize or
-                    global_j_min >= global_raster.RasterYSize or
-                    global_i_max < 0 or global_j_max < 0):
-                LOGGER.debug(stitch_raster_info)
-                raise ValueError(
-                    '%f %f %f %f out of bounds (%d, %d)',
-                    global_i_min, global_j_min,
-                    global_i_max, global_j_max,
-                    global_raster.RasterXSize,
-                    global_raster.RasterYSize)
+                # recall that y goes down as j goes up, so min y is max j
+                global_i_min, global_j_max = [
+                    int(round(x)) for x in gdal.ApplyGeoTransform(
+                        global_inv_gt, warp_bb[0], warp_bb[1])]
+                global_i_max, global_j_min = [
+                    int(round(x)) for x in gdal.ApplyGeoTransform(
+                        global_inv_gt, warp_bb[2], warp_bb[3])]
 
-            # clamp to fit in the global i/j rasters
-            stitch_i = 0
-            stitch_j = 0
-            if global_i_min < 0:
-                stitch_i = -global_i_min
-                global_i_min = 0
-            if global_j_min < 0:
-                stitch_j = -global_j_min
-                global_j_min = 0
-            global_i_max = min(global_raster.RasterXSize, global_i_max)
-            global_j_max = min(global_raster.RasterYSize, global_j_max)
-            stitch_x_size = global_i_max - global_i_min
-            stitch_y_size = global_j_max - global_j_min
+                if (global_i_min >= global_raster.RasterXSize or
+                        global_j_min >= global_raster.RasterYSize or
+                        global_i_max < 0 or global_j_max < 0):
+                    LOGGER.debug(stitch_raster_info)
+                    raise ValueError(
+                        '%f %f %f %f out of bounds (%d, %d)',
+                        global_i_min, global_j_min,
+                        global_i_max, global_j_max,
+                        global_raster.RasterXSize,
+                        global_raster.RasterYSize)
 
-            stitch_raster = gdal.OpenEx(warp_raster_path, gdal.OF_RASTER)
+                # clamp to fit in the global i/j rasters
+                stitch_i = 0
+                stitch_j = 0
+                if global_i_min < 0:
+                    stitch_i = -global_i_min
+                    global_i_min = 0
+                if global_j_min < 0:
+                    stitch_j = -global_j_min
+                    global_j_min = 0
+                global_i_max = min(global_raster.RasterXSize, global_i_max)
+                global_j_max = min(global_raster.RasterYSize, global_j_max)
+                stitch_x_size = global_i_max - global_i_min
+                stitch_y_size = global_j_max - global_j_min
 
-            if stitch_i + stitch_x_size > stitch_raster.RasterXSize:
-                stitch_x_size = stitch_raster.RasterXSize - stitch_i
-            if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
-                stitch_y_size = stitch_raster.RasterYSize - stitch_j
+                stitch_raster = gdal.OpenEx(warp_raster_path, gdal.OF_RASTER)
 
-            global_array = global_band.ReadAsArray(
-                global_i_min, global_j_min,
-                global_i_max-global_i_min,
-                global_j_max-global_j_min)
+                if stitch_i + stitch_x_size > stitch_raster.RasterXSize:
+                    stitch_x_size = stitch_raster.RasterXSize - stitch_i
+                if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
+                    stitch_y_size = stitch_raster.RasterYSize - stitch_j
 
-            stitch_nodata = stitch_raster_info['nodata'][0]
-            global_nodata = global_raster_info['nodata'][0]
-
-            stitch_array = stitch_raster.ReadAsArray(
-                stitch_i, stitch_j, stitch_x_size, stitch_y_size)
-            valid_stitch = (
-                ~numpy.isclose(stitch_array, stitch_nodata))
-            if global_array.size != stitch_array.size:
-                raise ValueError(
-                    "global not equal to stitch:\n"
-                    "%d %d %d %d\n%d %d %d %d",
+                global_array = global_band.ReadAsArray(
                     global_i_min, global_j_min,
                     global_i_max-global_i_min,
-                    global_j_max-global_j_min,
+                    global_j_max-global_j_min)
+
+                stitch_nodata = stitch_raster_info['nodata'][0]
+                global_nodata = global_raster_info['nodata'][0]
+
+                stitch_array = stitch_raster.ReadAsArray(
                     stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+                valid_stitch = (
+                    ~numpy.isclose(stitch_array, stitch_nodata))
+                if global_array.size != stitch_array.size:
+                    raise ValueError(
+                        "global not equal to stitch:\n"
+                        "%d %d %d %d\n%d %d %d %d",
+                        global_i_min, global_j_min,
+                        global_i_max-global_i_min,
+                        global_j_max-global_j_min,
+                        stitch_i, stitch_j, stitch_x_size, stitch_y_size)
 
-            global_array[valid_stitch] = stitch_array[valid_stitch]
-            global_band.WriteArray(
-                global_array, xoff=global_i_min, yoff=global_j_min)
-            global_band = None
+                global_array[valid_stitch] = stitch_array[valid_stitch]
+                global_band.WriteArray(
+                    global_array, xoff=global_i_min, yoff=global_j_min)
+                global_band = None
 
-    kernel_path = os.path.join(WORKSPACE_DIR, 'avg_kernel.tif')
-    make_pixel_neighbor_kernel(kernel_path)
-
-    for raster, _, raster_path in global_raster_info_map.values():
-        smoothed_raster_path = os.path.join(
-            WORKSPACE_DIR, 'smooth_%s' % os.path.basename(raster_path))
-        raster.FlushCache()
-        pygeoprocessing.convolve_2d(
-            (raster_path, 1), (kernel_path, 1),
-            smoothed_raster_path, ignore_nodata=True, mask_nodata=False,
-            normalize_kernel=True)
+                try:
+                    shutil.rmtree(tdd_downloader.get_path(watershed_id))
+                except OSError:
+                    LOGGER.warn(
+                        "couldn't remove %s" % tdd_downloader.get_path(
+                            watershed_id))
 
     task_graph.join()
     task_graph.close()
