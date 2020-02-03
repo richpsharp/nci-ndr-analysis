@@ -225,12 +225,16 @@ if __name__ == '__main__':
         watershed_basename = (
             os.path.basename(os.path.splitext(watershed_path)[0]))
         watershed_layer = watershed_vector.GetLayer()
-        watershed_layer_map[watershed_basename] = watershed_layer
         feature_total_count += watershed_layer.GetFeatureCount()
+        watershed_layer = None
+        watershed_vector = None
+        watershed_layer_map[watershed_basename] = watershed_path
 
     feature_index = 0
-    for watershed_basename, watershed_layer in watershed_layer_map.items():
+    for watershed_basename, watershed_path in watershed_layer_map.items():
         LOGGER.info('processing %s', watershed_basename)
+        watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
+        watershed_layer = watershed_vector.GetLayer()
         for watershed_feature in watershed_layer:
             feature_index += 1
             if feature_index % 10000 == 0:
@@ -341,6 +345,9 @@ if __name__ == '__main__':
                     LOGGER.warn(
                         "couldn't remove %s" % tdd_downloader.get_path(
                             watershed_id))
+
+        watershed_layer = None
+        watershed_vector = None
 
     task_graph.join()
     task_graph.close()
