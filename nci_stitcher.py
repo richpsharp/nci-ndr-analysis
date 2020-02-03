@@ -199,7 +199,7 @@ if __name__ == '__main__':
         global_raster_path = os.path.join(
             WORKSPACE_DIR, '%s_stitch%s' % os.path.splitext(os.path.basename(
                 raster_path_pattern)))
-        target_token_complete_path = '%s.INITALIZED' % os.path.splitext(
+        target_token_complete_path = '%s.initalized' % os.path.splitext(
             global_raster_path)[0]
         make_empty_task = task_graph.add_task(
             func=make_empty_wgs84_raster,

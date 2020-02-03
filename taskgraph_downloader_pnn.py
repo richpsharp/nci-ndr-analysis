@@ -114,6 +114,7 @@ class TaskGraphDownloader(object):
                 args=(ecoshard_url, self.download_dir, unzip_token_path),
                 target_path_list=[unzip_token_path],
                 task_name='download %s' % os.path.basename(ecoshard_url))
+            download_task.join()
             if local_path:
                 local_ecoshard_path = os.path.join(
                     self.download_dir, local_path)
@@ -169,13 +170,10 @@ def download_and_unzip(url, target_dir, target_token_path):
 
     LOGGER.debug('unzipping %s', zipfile_path)
     with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
-        for local_path in zip_ref.namelist():
-            if os.path.isfile(os.path.join(target_dir, local_path)):
-                pass
         zip_ref.extractall(target_dir)
 
-    LOGGER.debug('cleaning up %s', zipfile_path)
-    os.remove(zipfile_path)
+    # LOGGER.debug('cleaning up %s', zipfile_path)
+    # os.remove(zipfile_path)
 
     LOGGER.debug('writing token %s', target_token_path)
     with open(target_token_path, 'w') as touchfile:
