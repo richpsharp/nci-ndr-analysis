@@ -127,6 +127,7 @@ class TaskGraphDownloader(object):
             'local_path': local_ecoshard_path,
             'download_task': download_task
         }
+        LOGGER.debug('just added: %s', self.key_to_path_task_map[key])
 
     def get_path(self, key):
         """Return the filepath to the ecoshard referenced by key.
