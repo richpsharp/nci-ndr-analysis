@@ -137,7 +137,7 @@ class TaskGraphDownloader(object):
         local_path = self.key_to_path_task_map[key]['local_path']
         self.key_to_path_task_map[key]['download_task'].join()
         if not os.path.exists(local_path):
-            raise RuntimeError('%s does not exist on disk')
+            raise RuntimeError('%s does not exist on disk' % local_path)
         return local_path
 
     def join(self):
