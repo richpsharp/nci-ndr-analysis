@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import sys
+import urllib
 
 from osgeo import gdal
 from osgeo import osr
@@ -242,11 +243,13 @@ if __name__ == '__main__':
                     '%.2f%% complete', 100.0*feature_index/feature_total_count)
             basin_id = watershed_feature.GetField('BASIN_ID')
             watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
-            LOGGER.debug(watershed_id)
-            tdd_downloader.download_ecoshard(
-                os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
-                watershed_id, decompress='unzip',
-                local_path='workspace_worker/%s' % watershed_id)
+            try:
+                tdd_downloader.download_ecoshard(
+                    os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
+                    watershed_id, decompress='unzip',
+                    local_path='workspace_worker/%s' % watershed_id)
+            except urllib.error.HTTPError:
+                pass  # probably not a workspace we processed
 
             for raster_subpath in raster_path_base_list:
                 global_raster, global_raster_info, _ = global_raster_info_map[
