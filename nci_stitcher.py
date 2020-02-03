@@ -2,9 +2,9 @@
 import glob
 import logging
 import os
+import requests
 import shutil
 import sys
-import urllib
 
 from osgeo import gdal
 from osgeo import osr
@@ -246,15 +246,20 @@ if __name__ == '__main__':
                     '%.2f%% complete', 100.0*feature_index/feature_total_count)
             basin_id = watershed_feature.GetField('BASIN_ID')
             watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
-            try:
-                tdd_downloader.download_ecoshard(
-                    os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
-                    watershed_id, decompress='unzip',
-                    local_path='workspace_worker/%s' % watershed_id)
-            except urllib.error.HTTPError:
-                # probably not a workspace we processed
-                missing_watershed_file.write('%s\n' % watershed_id)
-                continue
+            # test if resource exists
+            watershed_url = os.path.join(
+                AWS_BASE_URL, '%s.zip' % watershed_id)
+            with requests.get(watershed_url, stream=True) as response:
+                try:
+                    response.raise_for_status()
+                    tdd_downloader.download_ecoshard(
+                        os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
+                        watershed_id, decompress='unzip',
+                        local_path='workspace_worker/%s' % watershed_id)
+                except requests.exceptions.HTTPError:
+                    # probably not a workspace we processed
+                    missing_watershed_file.write('%s\n' % watershed_id)
+                    continue
 
             for raster_subpath in raster_path_base_list:
                 global_raster, global_raster_info, _ = global_raster_info_map[
