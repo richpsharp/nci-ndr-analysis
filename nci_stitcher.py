@@ -215,7 +215,9 @@ if __name__ == '__main__':
 
     watershed_path_list = list(glob.glob(
         os.path.join(tdd_downloader.get_path('watersheds'), '*.shp')))
-    LOGGER.debug('this is the watershed_path_list: %s', watershed_path_list)
+    LOGGER.debug(
+        'this is the base: %s\nwatershed_path_list: %s',
+        tdd_downloader.get_path('watersheds'), watershed_path_list)
     watershed_layer_map = {}
     feature_total_count = 0
     for watershed_path in watershed_path_list:
