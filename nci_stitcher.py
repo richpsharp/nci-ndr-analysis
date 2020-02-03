@@ -234,7 +234,7 @@ if __name__ == '__main__':
     feature_index = 0
 
     missing_watershed_file = open(
-        'missing_watersheds.txt', 'w', buffer=1)
+        'missing_watersheds.txt', 'w', buffering=1)
     for watershed_basename, watershed_path in watershed_layer_map.items():
         LOGGER.info('processing %s', watershed_basename)
         watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
