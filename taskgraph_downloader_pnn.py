@@ -39,8 +39,10 @@ class TaskGraphDownloader(object):
         except OSError:
             pass
         if isinstance(taskgraph_object_or_dir, taskgraph.TaskGraph):
+            LOGGER.debug('got taskgraph object')
             self.task_graph = taskgraph_object_or_dir
         else:
+            LOGGER.debug('no taskgraph object, creating internal one')
             self.task_graph = taskgraph.TaskGraph(
                 taskgraph_object_or_dir, n_workers)
         # this will be a dictionary indexed by ecoshard key to a dict
