@@ -230,6 +230,7 @@ if __name__ == '__main__':
 
     feature_index = 0
     for watershed_basename, watershed_layer in watershed_layer_map.items():
+        LOGGER.info('processing %s', watershed_basename)
         for watershed_feature in watershed_layer:
             feature_index += 1
             if feature_index % 10000 == 0:
