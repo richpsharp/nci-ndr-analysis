@@ -1,6 +1,8 @@
 """Downloader class that uses TaskGraph."""
 import gzip
+import logging
 import os
+import sys
 import zipfile
 
 import ecoshard
@@ -8,6 +10,14 @@ import taskgraph
 
 
 GZIP_BUFFER_SIZE = 2**20
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format=(
+        '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
+        ' [%(funcName)s:%(lineno)d] %(message)s'),
+    stream=sys.stdout)
+LOGGER = logging.getLogger(__name__)
 
 
 class TaskGraphDownloader(object):
@@ -157,18 +167,23 @@ def download_and_unzip(url, target_dir, target_token_path):
 
     """
     zipfile_path = os.path.join(target_dir, os.path.basename(url))
+    LOGGER.debug('downloading %s', url)
     ecoshard.download_url(url, zipfile_path)
 
+    LOGGER.debug('unzipping %s', zipfile_path)
     with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
         for local_path in zip_ref.namelist():
             if os.path.isfile(os.path.join(target_dir, local_path)):
                 pass
         zip_ref.extractall(target_dir)
 
+    LOGGER.debug('cleaning up %s', zipfile_path)
     os.remove(zipfile_path)
 
+    LOGGER.debug('writing token %s', target_token_path)
     with open(target_token_path, 'w') as touchfile:
         touchfile.write(f'unzipped {zipfile_path}')
+    LOGGER.debug('donw with download and unzip')
 
 
 def download_and_ungzip(url, target_path):
