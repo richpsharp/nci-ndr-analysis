@@ -206,6 +206,7 @@ if __name__ == '__main__':
                 WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
                 global_raster_path, target_token_complete_path),
             target_path_list=[target_token_complete_path],
+            ignore_path_list=[global_raster_path],
             task_name='make empty %s' % os.path.basename(raster_path_pattern))
         make_empty_task.join()
         global_raster_info_map[raster_path_pattern] = (
