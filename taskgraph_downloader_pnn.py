@@ -11,12 +11,6 @@ import taskgraph
 
 GZIP_BUFFER_SIZE = 2**20
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format=(
-        '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
-        ' [%(funcName)s:%(lineno)d] %(message)s'),
-    stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 
 
