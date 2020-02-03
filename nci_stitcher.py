@@ -152,6 +152,27 @@ def make_empty_wgs84_raster(
             target_token_file.write('complete!')
 
 
+def make_pixel_neighbor_kernel(kernel_path):
+    """Make a 3x3 raster with a 9 in the middle and 1s on the outside."""
+    driver = gdal.GetDriverByName('GTiff')
+    kernel_raster = driver.Create(
+        kernel_path.encode('utf-8'), 3, 3, 1,
+        gdal.GDT_Float32)
+
+    # Make some kind of geotransform, it doesn't matter what but
+    # will make GIS libraries behave better if it's all defined
+    kernel_raster.SetGeoTransform([0, 1, 0, 0, 0, -1])
+    srs = osr.SpatialReference()
+    srs.SetWellKnownGeogCS('WGS84')
+    kernel_raster.SetProjection(srs.ExportToWkt())
+
+    kernel_band = kernel_raster.GetRasterBand(1)
+    kernel_band.SetNoDataValue(127)
+    kernel_array = numpy.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]])
+    kernel_array = kernel_array / numpy.sum(kernel_array)
+    kernel_band.WriteArray(kernel_array)
+
+
 if __name__ == '__main__':
     try:
         os.makedirs(WARP_DIR)
@@ -171,8 +192,6 @@ if __name__ == '__main__':
         'intermediate_outputs/modified_load_n.tif',
         'intermediate_outputs/stream.tif',
         ]
-    query_point = shapely.geometry.Point(-117, 38)
-    buffer_range = 1.0
     global_raster_info_map = {}
     for raster_path_pattern in raster_path_base_list:
         global_raster_path = os.path.join(
@@ -185,16 +204,13 @@ if __name__ == '__main__':
             args=(
                 WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
                 global_raster_path, target_token_complete_path),
-            kwargs={
-                'center_point': (query_point.x, query_point.y),
-                'buffer_range': buffer_range,
-            },
             target_path_list=[target_token_complete_path],
             task_name='make empty %s' % os.path.basename(raster_path_pattern))
         make_empty_task.join()
         global_raster_info_map[raster_path_pattern] = (
             gdal.OpenEx(global_raster_path, gdal.OF_RASTER | gdal.GA_Update),
-            pygeoprocessing.get_raster_info(global_raster_path))
+            pygeoprocessing.get_raster_info(global_raster_path),
+            global_raster_path)
 
     watershed_strtree = build_strtree(
         os.path.join(tdd_downloader.get_path('watersheds'), 'na*.shp'))
@@ -215,7 +231,7 @@ if __name__ == '__main__':
             local_path='workspace_worker/%s' % watershed_id)
 
         for raster_subpath in raster_path_base_list:
-            global_raster, global_raster_info = global_raster_info_map[
+            global_raster, global_raster_info, _ = global_raster_info_map[
                 raster_subpath]
             global_band = global_raster.GetRasterBand(1)
             global_inv_gt = gdal.InvGeoTransform(
@@ -227,7 +243,6 @@ if __name__ == '__main__':
             warp_raster_path = os.path.join(
                 WARP_DIR, '%s_%s' % (
                     watershed_id, os.path.basename(stitch_raster_path)))
-
             warp_task = task_graph.add_task(
                 func=pygeoprocessing.warp_raster,
                 args=(
@@ -247,6 +262,7 @@ if __name__ == '__main__':
             global_i_max, global_j_min = [
                 int(round(x)) for x in gdal.ApplyGeoTransform(
                     global_inv_gt, warp_bb[2], warp_bb[3])]
+
             if (global_i_min >= global_raster.RasterXSize or
                     global_j_min >= global_raster.RasterYSize or
                     global_i_max < 0 or global_j_max < 0):
@@ -303,6 +319,19 @@ if __name__ == '__main__':
             global_array[valid_stitch] = stitch_array[valid_stitch]
             global_band.WriteArray(
                 global_array, xoff=global_i_min, yoff=global_j_min)
+            global_band = None
+
+    kernel_path = os.path.join(WORKSPACE_DIR, 'avg_kernel.tif')
+    make_pixel_neighbor_kernel(kernel_path)
+
+    for raster, _, raster_path in global_raster_info_map.values():
+        smoothed_raster_path = os.path.join(
+            WORKSPACE_DIR, 'smooth_%s' % os.path.basename(raster_path))
+        raster.FlushCache()
+        pygeoprocessing.convolve_2d(
+            (raster_path, 1), (kernel_path, 1),
+            smoothed_raster_path, ignore_nodata=True, mask_nodata=False,
+            normalize_kernel=True)
 
     task_graph.join()
     task_graph.close()
