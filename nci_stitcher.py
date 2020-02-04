@@ -71,7 +71,7 @@ def build_strtree(vector_path_pattern):
         LOGGER.debug('loop through features for rtree')
         for index, feature in enumerate(layer):
             if index % 10000 == 0:
-                LOGGER.debug(
+                LOGGER.info(
                     '%.2f%% complete in %s',
                     100.0 * index/layer.GetFeatureCount(),
                     vector_path)
@@ -249,10 +249,10 @@ if __name__ == '__main__':
         watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
         watershed_layer = watershed_vector.GetLayer()
         for watershed_feature in watershed_layer:
-            feature_index += 1
-            if feature_index % 10000 == 0:
+            if feature_index % 100 == 0:
                 LOGGER.info(
                     '%.2f%% complete', 100.0*feature_index/feature_total_count)
+            feature_index += 1
             basin_id = watershed_feature.GetField('BASIN_ID')
             watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
             # test if resource exists
