@@ -93,7 +93,8 @@ def build_strtree(vector_path_pattern):
 
 def make_empty_wgs84_raster(
         cell_size, nodata_value, target_datatype, target_raster_path,
-        target_token_complete_path, center_point=None, buffer_range=None):
+        token_write_data, target_token_complete_path,
+        center_point=None, buffer_range=None):
     """Make a big empty raster in WGS84 projection.
 
     Parameters:
@@ -104,6 +105,8 @@ def make_empty_wgs84_raster(
         target_raster_path (str): this is the target raster that will cover
             [-180, 180), [90, -90) with cell size units with y direction being
             negative.
+        token_write_data (str); data to write in the complete token, this is
+            so the function signature can be unique.
         target_token_complete_path (str): this file is created if the
             mosaic to target is successful. Useful for taskgraph task
             scheduling.
@@ -151,7 +154,7 @@ def make_empty_wgs84_raster(
     target_raster = gdal.OpenEx(target_raster_path, gdal.OF_RASTER)
     if target_raster:
         with open(target_token_complete_path, 'w') as target_token_file:
-            target_token_file.write('complete!')
+            target_token_file.write(token_write_data)
 
 
 def make_pixel_neighbor_kernel(kernel_path):
@@ -199,13 +202,19 @@ if __name__ == '__main__':
         global_raster_path = os.path.join(
             WORKSPACE_DIR, '%s_stitch%s' % os.path.splitext(os.path.basename(
                 raster_path_pattern)))
-        target_token_complete_path = '%s.initalized' % os.path.splitext(
+        target_token_complete_path = '%s.initialized' % os.path.splitext(
             global_raster_path)[0]
+        raster_basename = os.path.basename(
+            os.path.splitext(global_raster_path)[0])
+        LOGGER.debug(
+            '******** making empty raster %s %s', target_token_complete_path,
+            global_raster_path)
         make_empty_task = task_graph.add_task(
             func=make_empty_wgs84_raster,
             args=(
                 WGS84_CELL_SIZE, GLOBAL_NODATA_VAL, gdal.GDT_Float32,
-                global_raster_path, target_token_complete_path),
+                global_raster_path, raster_basename,
+                target_token_complete_path),
             target_path_list=[target_token_complete_path],
             ignore_path_list=[global_raster_path],
             task_name='make empty %s' % os.path.basename(raster_path_pattern))
@@ -214,6 +223,7 @@ if __name__ == '__main__':
             gdal.OpenEx(global_raster_path, gdal.OF_RASTER | gdal.GA_Update),
             pygeoprocessing.get_raster_info(global_raster_path),
             global_raster_path)
+    sys.exit()
 
     watershed_path_list = list(glob.glob(
         os.path.join(tdd_downloader.get_path('watersheds'), '*.shp')))
