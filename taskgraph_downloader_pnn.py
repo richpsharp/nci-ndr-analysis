@@ -172,13 +172,13 @@ def download_and_unzip(url, target_dir, target_token_path):
     with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
         zip_ref.extractall(target_dir)
 
-    # LOGGER.debug('cleaning up %s', zipfile_path)
-    # os.remove(zipfile_path)
+    LOGGER.debug('cleaning up %s', zipfile_path)
+    os.remove(zipfile_path)
 
     LOGGER.debug('writing token %s', target_token_path)
     with open(target_token_path, 'w') as touchfile:
         touchfile.write(f'unzipped {zipfile_path}')
-    LOGGER.debug('donw with download and unzip')
+    LOGGER.debug('done with download and unzip')
 
 
 def download_and_ungzip(url, target_path):

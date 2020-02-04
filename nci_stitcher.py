@@ -223,7 +223,6 @@ if __name__ == '__main__':
             gdal.OpenEx(global_raster_path, gdal.OF_RASTER | gdal.GA_Update),
             pygeoprocessing.get_raster_info(global_raster_path),
             global_raster_path)
-    sys.exit()
 
     watershed_path_list = list(glob.glob(
         os.path.join(tdd_downloader.get_path('watersheds'), '*.shp')))
@@ -241,7 +240,6 @@ if __name__ == '__main__':
         watershed_layer = None
         watershed_vector = None
         watershed_layer_map[watershed_basename] = watershed_path
-
     feature_index = 0
 
     missing_watershed_file = open(
@@ -267,6 +265,7 @@ if __name__ == '__main__':
                         os.path.join(AWS_BASE_URL, '%s.zip' % watershed_id),
                         watershed_id, decompress='unzip',
                         local_path='workspace_worker/%s' % watershed_id)
+                    task_graph.join()
                 except requests.exceptions.HTTPError:
                     # probably not a workspace we processed
                     missing_watershed_file.write('%s\n' % watershed_id)
@@ -363,12 +362,12 @@ if __name__ == '__main__':
                     global_array, xoff=global_i_min, yoff=global_j_min)
                 global_band = None
 
-                try:
-                    shutil.rmtree(tdd_downloader.get_path(watershed_id))
-                except OSError:
-                    LOGGER.warn(
-                        "couldn't remove %s" % tdd_downloader.get_path(
-                            watershed_id))
+            try:
+                shutil.rmtree(tdd_downloader.get_path(watershed_id))
+            except OSError:
+                LOGGER.warn(
+                    "couldn't remove %s" % tdd_downloader.get_path(
+                        watershed_id))
 
         watershed_layer = None
         watershed_vector = None
