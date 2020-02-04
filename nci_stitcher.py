@@ -29,13 +29,12 @@ WATERSHEDS_URL = (
     'blake2b_14ac9c77d2076d51b0258fd94d9378d4.zip')
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format=(
         '%(asctime)s (%(relativeCreated)d) %(levelname)s %(name)s'
         ' [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
-logging.getLogger('taskgraph').setLevel(logging.DEBUG)
 WGS84_CELL_SIZE = (0.002, -0.002)
 GLOBAL_NODATA_VAL = -1
 
@@ -245,7 +244,7 @@ if __name__ == '__main__':
     missing_watershed_file = open(
         'missing_watersheds.txt', 'w', buffering=1)
     for watershed_basename, watershed_path in watershed_layer_map.items():
-        LOGGER.info('processing %s', watershed_basename)
+        LOGGER.debug('processing %s', watershed_basename)
         watershed_vector = gdal.OpenEx(watershed_path, gdal.OF_VECTOR)
         watershed_layer = watershed_vector.GetLayer()
         for watershed_feature in watershed_layer:
