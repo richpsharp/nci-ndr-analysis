@@ -73,10 +73,10 @@ SCENARIO_ID_LULC_FERT_URL_PAIRS = [
      'https://storage.googleapis.com/nci-ecoshards/'
      'Intensified_NitrogenApplication_Rate_'
      'md5_7639f5b9604da28e683bfc138239df66.tif')
-    ('scenario_d',
-     'FILL_IN_LULC',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif')
+    # ('scenario_d',
+    #  'FILL_IN_LULC',
+    #  'https://storage.googleapis.com/nci-ecoshards/'
+    #  'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif')
     ]
 
 BIOPHYSICAL_URL = (
@@ -245,9 +245,10 @@ def ndr_single_worker(joinable_work_queue, error_queue):
         try:
             watershed_basename, watershed_fid, bucket_uri_prefix = (
                 joinable_work_queue.get())
-            single_run_ndr(
-                watershed_basename, watershed_fid, bucket_uri_prefix,
-                error_queue)
+            for scenario_id in []:
+                single_run_ndr(
+                    watershed_basename, watershed_fid, bucket_uri_prefix,
+                    scenario_id, error_queue)
         except Exception:
             LOGGER.exception('exception in ndr worker')
             error_queue.put(traceback.format_exc())
@@ -256,7 +257,8 @@ def ndr_single_worker(joinable_work_queue, error_queue):
 
 
 def single_run_ndr(
-        watershed_basename, watershed_fid, bucket_uri_prefix, error_queue):
+        watershed_basename, watershed_fid, bucket_uri_prefix, scenario_id,
+        error_queue):
     """Run a single instance of NDR."""
     try:
         LOGGER.debug(
@@ -330,9 +332,9 @@ def single_run_ndr(
         args = {
             'workspace_dir': local_workspace,
             'dem_path': dem_vrt_path,
-            'lulc_path': PATH_MAP['lulc_path'],
+            'lulc_path': PATH_MAP[scenario_id]['lulc_path'],
             'runoff_proxy_path': PATH_MAP['precip_path'],
-            'ag_load_path': PATH_MAP['fertilizer_path'],
+            'ag_load_path': PATH_MAP[scenario_id]['fertilizer_path'],
             'watersheds_path': local_watershed_path,
             'biophysical_table_path': (
                 PATH_MAP['biophysical_table_path']),
@@ -354,8 +356,8 @@ def single_run_ndr(
             zipfile_path)
         zipdir(args['workspace_dir'], zipfile_path)
         zipfile_s3_uri = (
-            "%s/%s" %
-            (bucket_uri_prefix, os.path.basename(zipfile_path)))
+            "%s/%s/%s" %
+            (bucket_uri_prefix, scenario_id, os.path.basename(zipfile_path)))
         subprocess.run(
             ["/usr/local/bin/aws2 s3 cp %s %s" % (
                 zipfile_path, zipfile_s3_uri)], shell=True,
@@ -364,8 +366,8 @@ def single_run_ndr(
         os.remove(dem_vrt_path)
         workspace_url = (
             'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-            'watershed_workspaces/%s' %
-            os.path.basename(zipfile_path))
+            'watershed_workspaces/%s/%s' %
+            (scenario_id, os.path.basename(zipfile_path)))
         os.remove(zipfile_path)
         try:
             head_request = requests.head(workspace_url)
