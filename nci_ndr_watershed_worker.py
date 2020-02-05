@@ -9,8 +9,8 @@ import argparse
 import datetime
 import glob
 import logging
-import os
 import multiprocessing
+import os
 import queue
 import shutil
 import subprocess
@@ -21,9 +21,6 @@ import traceback
 import zipfile
 
 from osgeo import gdal
-# set a 1GB limit for the cache
-gdal.SetCacheMax(2**29)
-
 from osgeo import ogr
 from osgeo import osr
 import ecoshard
@@ -34,6 +31,10 @@ import pygeoprocessing
 import requests
 import retrying
 import taskgraph
+
+# set a 512MB limit for the cache
+gdal.SetCacheMax(2**29)
+
 
 DEM_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -48,17 +49,40 @@ PRECIP_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'worldclim_2015_md5_16356b3770460a390de7e761a27dbfa1.tif')
 
-LULC_URL = (
-    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-    'lulc_gc_esa_classes_md5_15b6d376e67f9e26a7188727278e630e.tif')
-
-FERTILIZER_URL = (
-    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-    'nfertilizer_global_kg_ha_yr_md5_88dae2a76a120dedeab153a334f929cc.tif')
+SCENARIO_ID_LULC_FERT_URL_PAIRS = [
+    ('current', 'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+     'lulc_gc_esa_classes_md5_15b6d376e67f9e26a7188727278e630e.tif',
+     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+     'nfertilizer_global_kg_ha_yr_md5_88dae2a76a120dedeab153a334f929cc.tif'),
+    ('scenario_a',
+     'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
+     'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
+     'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
+    ('scenario_b',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'scenarios_intensified_ag_irrigated_'
+     'md5_f954fdd1729718beda90d8ab8182b17c.tif',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
+    ('scenario_c',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'scenarios_intensified_ag_irrigated_'
+     'md5_f954fdd1729718beda90d8ab8182b17c.tif',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'Intensified_NitrogenApplication_Rate_'
+     'md5_7639f5b9604da28e683bfc138239df66.tif')
+    ('scenario_d',
+     'FILL_IN_LULC',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif')
+    ]
 
 BIOPHYSICAL_URL = (
-    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-    'NDR_representative_table_md5_de23b04ab70107f72181ca7784642b95.csv')
+    'https://storage.googleapis.com/nci-ecoshards/'
+    'nci-NDR-biophysical_table_ESA_ARIES_RS2_'
+    'md5_18a0595bbc98ea5ad6a359fd3ee368ac.csv')
 
 GLOBAL_NDR_ARGS = {
     'threshold_flow_accumulation': 1000,
@@ -99,9 +123,8 @@ def main():
     download_task_map = {}
     # download all the base data
     for path_key_prefix, url in zip(
-            ('dem', 'watersheds', 'precip', 'lulc', 'fertilizer',
-             'biophysical_table'),
-            (DEM_URL, WATERSHEDS_URL, PRECIP_URL, LULC_URL, FERTILIZER_URL,
+            ('dem', 'watersheds', 'precip', 'biophysical_table'),
+            (DEM_URL, WATERSHEDS_URL, PRECIP_URL,
              BIOPHYSICAL_URL)):
         if url.endswith('zip'):
             path_key = '%s_zip_path' % path_key_prefix
@@ -115,6 +138,24 @@ def main():
             args=(url, PATH_MAP[path_key]),
             target_path_list=[PATH_MAP[path_key]],
             task_name='download %s' % path_key)
+
+    for scenario_id, lulc_url, fert_url in SCENARIO_ID_LULC_FERT_URL_PAIRS:
+        PATH_MAP[scenario_id] = {
+            'lulc_path': os.path.join(
+                ECOSHARD_DIR, os.path.basename(lulc_url)),
+            'fertilizer_path': os.path.join(
+                ECOSHARD_DIR, os.path.basename(fert_url)),
+        }
+        for url, path_key in [
+                (lulc_url, 'lulc_path'), (fert_url, 'fertilizer_path')]:
+            LOGGER.debug(
+                'scheduing download of %s: %s', scenario_id,
+                PATH_MAP[scenario_id][path_key])
+            download_task_map[path_key] = task_graph.add_task(
+                func=ecoshard.download_url,
+                args=(url, PATH_MAP[scenario_id][path_key]),
+                target_path_list=[PATH_MAP[scenario_id][path_key]],
+                task_name='download %s' % path_key)
 
     for path_zip_key in [k for k in PATH_MAP if 'zip' in k]:
         # unzip it
