@@ -50,33 +50,31 @@ PRECIP_URL = (
     'worldclim_2015_md5_16356b3770460a390de7e761a27dbfa1.tif')
 
 SCENARIO_ID_LULC_FERT_URL_PAIRS = [
-    ('current', 'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-     'lulc_gc_esa_classes_md5_15b6d376e67f9e26a7188727278e630e.tif',
-     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-     'nfertilizer_global_kg_ha_yr_md5_88dae2a76a120dedeab153a334f929cc.tif'),
-    ('scenario_a',
+    ('baseline',
      'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
      'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
      'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
      'https://storage.googleapis.com/nci-ecoshards/'
      'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
-    ('scenario_b',
+    ('ag_expansion',
      'https://storage.googleapis.com/nci-ecoshards/'
      'scenarios_intensified_ag_irrigated_'
      'md5_f954fdd1729718beda90d8ab8182b17c.tif',
      'https://storage.googleapis.com/nci-ecoshards/'
      'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
-    ('scenario_c',
+    ('ag_intensification',
      'https://storage.googleapis.com/nci-ecoshards/'
      'scenarios_intensified_ag_irrigated_'
      'md5_f954fdd1729718beda90d8ab8182b17c.tif',
      'https://storage.googleapis.com/nci-ecoshards/'
      'Intensified_NitrogenApplication_Rate_'
      'md5_7639f5b9604da28e683bfc138239df66.tif')
-    # ('scenario_d',
-    #  'FILL_IN_LULC',
-    #  'https://storage.googleapis.com/nci-ecoshards/'
-    #  'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif')
+    ('restoration',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'scenarios_restoration_to_natural_'
+     'md5_77ad9d933382c24b25da670fa87e63b8.tif',
+     'https://storage.googleapis.com/nci-ecoshards/'
+     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif')
     ]
 
 BIOPHYSICAL_URL = (
