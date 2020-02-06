@@ -124,6 +124,7 @@ class WorkerStateSet(object):
             if not self.ready_host_set:
                 LOGGER.debug('no more ready hosts, clear the flag')
                 self.host_ready_event.clear()
+            LOGGER.debug('returning ready host: %s', ready_host)
             return ready_host
 
     def get_counts(self):
