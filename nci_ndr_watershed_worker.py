@@ -69,7 +69,7 @@ SCENARIO_ID_LULC_FERT_URL_PAIRS = [
      'md5_f954fdd1729718beda90d8ab8182b17c.tif',
      'https://storage.googleapis.com/nci-ecoshards/'
      'Intensified_NitrogenApplication_Rate_'
-     'md5_7639f5b9604da28e683bfc138239df66.tif')
+     'md5_7639f5b9604da28e683bfc138239df66.tif'),
     ('restoration',
      'https://storage.googleapis.com/nci-ecoshards/'
      'scenarios_restoration_to_natural_'
