@@ -54,8 +54,6 @@ STITCH_DIR = os.path.join(WORKSPACE_DIR, 'stitch_workspace')
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
-WATERSHED_STATS_DATABASE_PATH = os.path.join(
-    CHURN_DIR, 'watershed_stats.sqlite3')
 logging.basicConfig(
     level=logging.DEBUG,
     format=(
@@ -351,7 +349,7 @@ def create_status_database(
             country_names = ','.join(country_name_list)
             job_status_list.append(
                 (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
-                 country_names, None, 0, 0))
+                 country_names, None, 0))
             if (index+1) % 10000 == 0:
                 LOGGER.debug(
                     'every 10000 inserting %s watersheds into DB',
@@ -455,7 +453,7 @@ def processing_complete():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('this was the payload: %s', payload)
-        watershed_fid_url_list = payload['watershed_fid_url_list']
+        watershed_fid_url_json_list = payload['watershed_fid_url_json_list']
         time_per_area = payload['time_per_area']
         session_id = payload['session_id']
         global TIME_PER_AREA
@@ -463,7 +461,7 @@ def processing_complete():
             TIME_PER_AREA = (TIME_PER_AREA + time_per_area) / 2.0
             host = SCHEDULED_MAP[session_id]['host']
             del SCHEDULED_MAP[session_id]
-        RESULT_QUEUE.put(watershed_fid_url_list)
+        RESULT_QUEUE.put(watershed_fid_url_json_list)
         GLOBAL_WORKER_STATE_SET.set_ready_host(host)
         return 'complete', 202
     except Exception:
@@ -478,10 +476,9 @@ def job_status_updater():
         try:
             LOGGER.debug('waiting for result')
             watershed_fid_url_list = RESULT_QUEUE.get()
-            # TODO: deal with the fact that there will be several workspace urls here
-            url_watershed_fid_list = [
-                (url, watershed, fid)
-                for watershed, fid, url in watershed_fid_url_list]
+            url_json_watershed_fid_list = [
+                (url_json_map, watershed, fid)
+                for watershed, fid, url_json_map in watershed_fid_url_list]
             while True:
                 try:
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
@@ -490,7 +487,7 @@ def job_status_updater():
                         'UPDATE job_status '
                         'SET workspace_urls_json=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
-                        url_watershed_fid_list)
+                        url_json_watershed_fid_list)
                     break
                 except Exception:
                     LOGGER.exception('error on connection')
@@ -499,8 +496,8 @@ def job_status_updater():
                     connection.commit()
                     cursor.close()
                     connection.close()
-            LOGGER.debug('inserting this: %s', url_watershed_fid_list)
-            LOGGER.debug('%d inserted', len(url_watershed_fid_list))
+            LOGGER.debug('inserting this: %s', url_json_watershed_fid_list)
+            LOGGER.debug('%d inserted', len(url_json_watershed_fid_list))
         except Exception:
             LOGGER.exception('unhandled exception')
 
@@ -930,9 +927,6 @@ def stitch_worker():
                 for scenario_id, workspace_url in workspace_url_map.items():
                     workspace_zip_path = os.path.join(
                         STITCH_DIR, os.path.basename(workspace_url))
-                    # TODO: this is just a hack because there are // in some results
-                    workspace_url = workspace_url.replace('//', '/').replace(
-                        'https:/', 'https://')
                     LOGGER.debug('download url: %s', workspace_url)
                     download_url(workspace_url, workspace_zip_path)
                     for raster_id, (path_prefix, gdal_type, nodata_value) in (

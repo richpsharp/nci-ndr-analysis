@@ -8,6 +8,7 @@ a RESTful API.
 import argparse
 import datetime
 import glob
+import json
 import logging
 import multiprocessing
 import os
@@ -406,7 +407,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
                 session_id) = payload
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'RUNNING'
-            watershed_fid_url_list = []
+            watershed_fid_url_json_list = []
             start_time = time.time()
             total_area = 0.0
             for watershed_basename, watershed_fid, watershed_area in (
@@ -414,11 +415,16 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
                 single_run_joinable_queue.put(
                     (watershed_basename, watershed_fid, bucket_uri_prefix))
                 total_area += watershed_area
-                zipfile_url = "%s/%s_%d.zip" % (
-                    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-                    'watershed_workspaces/', watershed_basename, watershed_fid)
-                watershed_fid_url_list.append(
-                    (watershed_basename, watershed_fid, zipfile_url))
+                watershed_url_map = {}
+                for scenario_id, _, _ in SCENARIO_ID_LULC_FERT_URL_PAIRS:
+                    zipfile_url = "%s/%s/%s_%d.zip" % (
+                        'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+                        'watershed_workspaces/', watershed_basename,
+                        watershed_fid)
+                    watershed_url_map[scenario_id] = zipfile_url
+                watershed_fid_url_json_list.append(
+                    (watershed_basename, scenario_id, watershed_fid,
+                     json.dumps(watershed_url_map)))
             single_run_joinable_queue.join()
             error_message = ''
             while True:
@@ -429,7 +435,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             if error_message:
                 raise RuntimeError(error_message)
             data_payload = {
-                'watershed_fid_url_list': watershed_fid_url_list,
+                'watershed_fid_url_json_list': watershed_fid_url_json_list,
                 'time_per_area': (time.time()-start_time) / total_area,
                 'session_id': session_id,
             }
