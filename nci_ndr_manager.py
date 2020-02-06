@@ -367,6 +367,11 @@ def create_status_database(
         token_file.write(str(datetime.datetime.now()))
 
 
+@APP.route('/')
+def index():
+    return 'hi'
+
+
 @APP.route('/api/v1/processing_status', methods=['GET'])
 def processing_status():
     """Return the state of processing."""
