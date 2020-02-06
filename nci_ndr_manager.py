@@ -36,6 +36,8 @@ import shapely.strtree
 import shapely.wkb
 import taskgraph
 
+from nci_ndr_watershed_worker import SCENARIO_ID_LULC_FERT_URL_PAIRS
+
 gdal.SetCacheMax(2**29)
 
 WATERSHEDS_URL = (
@@ -292,9 +294,8 @@ def create_status_database(
             watershed_area_deg REAL NOT NULL,
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
-            workspace_url TEXT,
-            stiched_n_export INT NOT NULL,
-            stiched_modified_load INT NOT NULL);
+            workspace_urls_json TEXT,
+            stiched INT NOT NULL);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -317,8 +318,8 @@ def create_status_database(
     insert_query = (
         'INSERT INTO job_status('
         'watershed_basename, fid, watershed_area_deg, job_status, '
-        'country_list, workspace_url, stiched_n_export, stiched_modified_load) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        'country_list, workspace_urls_json, stiched) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
             watersheds_dir_path).rglob('*.shp')]:
@@ -385,7 +386,7 @@ def processing_status():
 
         cursor.execute(
             'SELECT count(1) FROM job_status '
-            'WHERE (stiched_n_export=1 AND stiched_modified_load=1)')
+            'WHERE (stiched=1)')
         stitched_count = int(cursor.fetchone()[0])
 
         connection.commit()
@@ -477,6 +478,7 @@ def job_status_updater():
         try:
             LOGGER.debug('waiting for result')
             watershed_fid_url_list = RESULT_QUEUE.get()
+            # TODO: deal with the fact that there will be several workspace urls here
             url_watershed_fid_list = [
                 (url, watershed, fid)
                 for watershed, fid, url in watershed_fid_url_list]
@@ -486,7 +488,7 @@ def job_status_updater():
                     cursor = connection.cursor()
                     cursor.executemany(
                         'UPDATE job_status '
-                        'SET workspace_url=?, job_status=\'DEBUG\' '
+                        'SET workspace_urls_json=?, job_status=\'DEBUG\' '
                         'WHERE watershed_basename=? AND fid=?',
                         url_watershed_fid_list)
                     break
@@ -779,89 +781,129 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
 def stitch_into(master_raster_path, base_raster_path, nodata_value):
     """Stitch `base`into `master` by only overwriting non-nodata values."""
     try:
-        wgs84_base_raster_path = (
-            '%s_wgs84%s' % os.path.splitext(base_raster_path))
-        pygeoprocessing.warp_raster(
-            base_raster_path,
-            (GLOBAL_STITCH_WGS84_CELL_SIZE, -GLOBAL_STITCH_WGS84_CELL_SIZE),
-            wgs84_base_raster_path, 'near', target_sr_wkt=WGS84_WKT)
-
-        master_raster = gdal.OpenEx(
+        global_raster_info = pygeoprocessing.get_raster_info(master_raster_path)
+        global_raster = gdal.OpenEx(
             master_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-        master_band = master_raster.GetRasterBand(1)
-        master_raster_info = pygeoprocessing.get_raster_info(
-            master_raster_path)
-        master_nodata = master_raster_info['nodata'][0]
-        base_raster_info = pygeoprocessing.get_raster_info(
-            wgs84_base_raster_path)
-        master_gt = master_raster_info['geotransform']
-        base_gt = base_raster_info['geotransform']
-        base_nodata = base_raster_info['nodata']
+        global_band = global_raster.GetRasterBand(1)
+        global_inv_gt = gdal.InvGeoTransform(
+            global_raster_info['geotransform'])
+        warp_dir = os.path.dirname(base_raster_path)
+        warp_raster_path = os.path.join(
+            warp_dir, os.path.basename(base_raster_path))
+        pygeoprocessing.warp_raster(
+            base_raster_path, global_raster_info['pixel_size'],
+            warp_raster_path, 'near',
+            target_sr_wkt=global_raster_info['projection'])
+        warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
+        warp_bb = warp_info['bounding_box']
 
-        target_x_off = int((base_gt[0] - master_gt[0]) / master_gt[1])
-        target_y_off = int((base_gt[3] - master_gt[3]) / master_gt[5])
-        LOGGER.debug(
-            'stitch into: %f %f %s', target_x_off, target_y_off,
-            base_raster_info)
-        for offset_dict, base_block in pygeoprocessing.iterblocks(
-                (wgs84_base_raster_path, 1)):
-            master_block = master_band.ReadAsArray(
-                xoff=offset_dict['xoff']+target_x_off,
-                yoff=offset_dict['yoff']+target_y_off,
-                win_xsize=offset_dict['win_xsize'],
-                win_ysize=offset_dict['win_ysize'])
-            valid_mask = (
-                numpy.isclose(master_block, master_nodata) &
-                ~numpy.isclose(base_block, base_nodata))
-            master_block[valid_mask] = base_block[valid_mask]
-            master_band.WriteArray(
-                master_block,
-                xoff=offset_dict['xoff']+target_x_off,
-                yoff=offset_dict['yoff']+target_y_off)
-        master_band.FlushCache()
-        master_band = None
-        master_raster = None
+        # recall that y goes down as j goes up, so min y is max j
+        global_i_min, global_j_max = [
+            int(round(x)) for x in gdal.ApplyGeoTransform(
+                global_inv_gt, warp_bb[0], warp_bb[1])]
+        global_i_max, global_j_min = [
+            int(round(x)) for x in gdal.ApplyGeoTransform(
+                global_inv_gt, warp_bb[2], warp_bb[3])]
 
+        if (global_i_min >= global_raster.RasterXSize or
+                global_j_min >= global_raster.RasterYSize or
+                global_i_max < 0 or global_j_max < 0):
+            LOGGER.debug(global_raster_info)
+            raise ValueError(
+                '%f %f %f %f out of bounds (%d, %d)',
+                global_i_min, global_j_min,
+                global_i_max, global_j_max,
+                global_raster.RasterXSize,
+                global_raster.RasterYSize)
+
+        # clamp to fit in the global i/j rasters
+        stitch_i = 0
+        stitch_j = 0
+        if global_i_min < 0:
+            stitch_i = -global_i_min
+            global_i_min = 0
+        if global_j_min < 0:
+            stitch_j = -global_j_min
+            global_j_min = 0
+        global_i_max = min(global_raster.RasterXSize, global_i_max)
+        global_j_max = min(global_raster.RasterYSize, global_j_max)
+        stitch_x_size = global_i_max - global_i_min
+        stitch_y_size = global_j_max - global_j_min
+
+        stitch_raster = gdal.OpenEx(warp_raster_path, gdal.OF_RASTER)
+
+        if stitch_i + stitch_x_size > stitch_raster.RasterXSize:
+            stitch_x_size = stitch_raster.RasterXSize - stitch_i
+        if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
+            stitch_y_size = stitch_raster.RasterYSize - stitch_j
+
+        global_array = global_band.ReadAsArray(
+            global_i_min, global_j_min,
+            global_i_max-global_i_min,
+            global_j_max-global_j_min)
+
+        stitch_nodata = warp_info['nodata'][0]
+
+        stitch_array = stitch_raster.ReadAsArray(
+            stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+        valid_stitch = (
+            ~numpy.isclose(stitch_array, stitch_nodata))
+        if global_array.size != stitch_array.size:
+            raise ValueError(
+                "global not equal to stitch:\n"
+                "%d %d %d %d\n%d %d %d %d",
+                global_i_min, global_j_min,
+                global_i_max-global_i_min,
+                global_j_max-global_j_min,
+                stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+
+        global_array[valid_stitch] = stitch_array[valid_stitch]
+        global_band.WriteArray(
+            global_array, xoff=global_i_min, yoff=global_j_min)
+        global_band = None
     except Exception:
         LOGGER.exception('error on stitch into')
     finally:
-        pass # os.remove(wgs84_base_raster_path)
+        pass  # os.remove(wgs84_base_raster_path)
 
 
 def stitch_worker():
     """Mange the stitching of a raster."""
     try:
+        stitch_raster_path_map = {}
+        scenario_ids = [
+            x[0] for x in SCENARIO_ID_LULC_FERT_URL_PAIRS]
         task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
-        raster_id_path_map = {}
         for raster_id, (path_prefix, gdal_type, nodata_value) in (
                 GLOBAL_STITCH_MAP.items()):
-            stitch_raster_path = os.path.join(STITCH_DIR, '%s.tif' % raster_id)
-            raster_id_path_map[raster_id] = stitch_raster_path
-            stitch_raster_token_path = '%s.CREATED' % (
-                os.path.splitext(stitch_raster_path)[0])
-            task_graph.add_task(
-                func=make_empty_wgs84_raster,
-                args=(
-                    GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
-                    stitch_raster_path, stitch_raster_token_path),
-                target_path_list=[stitch_raster_token_path],
-                task_name='make base %s' % raster_id)
+            stitch_raster_path_map[raster_id] = {}
+            for scenario_id in scenario_ids:
+                stitch_raster_path = os.path.join(
+                    STITCH_DIR, '%s_%s.tif' % (scenario_id, raster_id))
+                stitch_raster_path_map[raster_id][scenario_id] = (
+                    stitch_raster_path)
+                stitch_raster_token_path = '%s.CREATED' % (
+                    os.path.splitext(stitch_raster_path)[0])
+                task_graph.add_task(
+                    func=make_empty_wgs84_raster,
+                    args=(
+                        GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
+                        stitch_raster_path, stitch_raster_token_path),
+                    target_path_list=[stitch_raster_token_path],
+                    task_name='make base %s' % raster_id)
         task_graph.join()
     except Exception:
         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
 
     # This section can be uncommented for debugging in the case of wanting to
     # reset all the stitched rasters
-    connection = sqlite3.connect(STATUS_DATABASE_PATH)
-    cursor = connection.cursor()
-    update_stiched_record = (
-        'UPDATE job_status '
-        'SET stiched_n_export=0, stiched_modified_load=0 '
-        'WHERE stiched_n_export=1 OR stiched_modified_load=1')
-    cursor.execute(update_stiched_record)
-    connection.commit()
-    connection.close()
-    cursor = None
+    # connection = sqlite3.connect(STATUS_DATABASE_PATH)
+    # cursor = connection.cursor()
+    # update_stiched_record = 'UPDATE job_status SET stiched=0 WHERE stiched=1'
+    # cursor.execute(update_stiched_record)
+    # connection.commit()
+    # connection.close()
+    # cursor = None
 
     while True:
         # update the stitch with the latest.
@@ -869,10 +911,10 @@ def stitch_worker():
         try:
             LOGGER.debug('searching for a new stitch')
             select_not_processed = (
-                'SELECT watershed_basename, fid, workspace_url '
+                'SELECT watershed_basename, fid, workspace_urls_json '
                 'FROM job_status '
-                'WHERE (stiched_n_export = 0 OR stiched_modified_load = 0) '
-                'AND workspace_url IS NOT NULL')
+                'WHERE (stiched = 0) '
+                'AND workspace_urls_json IS NOT NULL')
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
             cursor = connection.cursor()
             cursor.execute(select_not_processed)
@@ -882,56 +924,58 @@ def stitch_worker():
             cursor = None
             LOGGER.debug('query string: %s', select_not_processed)
             LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
-            for watershed_basename, fid, workspace_url in (
+            for watershed_basename, fid, workspace_urls_json in (
                     update_ws_fid_list):
-                workspace_zip_path = os.path.join(
-                    STITCH_DIR, os.path.basename(workspace_url))
-                # TODO: this is just a hack because there are // in some results
-                workspace_url = workspace_url.replace('//', '/').replace(
-                    'https:/', 'https://')
-                LOGGER.debug('download url: %s', workspace_url)
-                download_url(workspace_url, workspace_zip_path)
-                for raster_id, (path_prefix, gdal_type, nodata_value) in (
-                        GLOBAL_STITCH_MAP.items()):
-                    LOGGER.debug('processing raster %s', raster_id)
-                    zipped_path = path_prefix.replace(
-                        '[BASENAME]', watershed_basename).replace(
-                        '[FID]', str(fid))
-                    local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
-                        watershed_basename, fid))
-                    with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
-                        zip_ref.extract(zipped_path, local_zip_dir)
-                    LOGGER.debug(
-                        'stitching %s %s in %s', watershed_basename, fid,
-                        raster_id)
-                    local_path = os.path.join(local_zip_dir, zipped_path)
-                    stitch_into(
-                        raster_id_path_map[raster_id], local_path,
-                        nodata_value)
-                os.remove(workspace_zip_path)
-                shutil.rmtree(local_zip_dir)
+                workspace_url_map = json.loads(workspace_urls_json)
+                for scenario_id, workspace_url in workspace_url_map.items():
+                    workspace_zip_path = os.path.join(
+                        STITCH_DIR, os.path.basename(workspace_url))
+                    # TODO: this is just a hack because there are // in some results
+                    workspace_url = workspace_url.replace('//', '/').replace(
+                        'https:/', 'https://')
+                    LOGGER.debug('download url: %s', workspace_url)
+                    download_url(workspace_url, workspace_zip_path)
+                    for raster_id, (path_prefix, gdal_type, nodata_value) in (
+                            GLOBAL_STITCH_MAP.items()):
+                        LOGGER.debug('processing raster %s', raster_id)
+                        zipped_path = path_prefix.replace(
+                            '[BASENAME]', watershed_basename).replace(
+                            '[FID]', str(fid))
+                        local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
+                            watershed_basename, fid))
+                        with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
+                            zip_ref.extract(zipped_path, local_zip_dir)
+                        LOGGER.debug(
+                            'stitching %s %s in %s', watershed_basename, fid,
+                            raster_id)
+                        local_path = os.path.join(local_zip_dir, zipped_path)
+                        stitch_into(
+                            stitch_raster_path_map[raster_id][scenario_id],
+                            local_path, nodata_value)
+                    os.remove(workspace_zip_path)
+                    shutil.rmtree(local_zip_dir)
 
-                while True:
-                    try:
-                        connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                        cursor = connection.cursor()
-                        update_stiched_record = (
-                            'UPDATE job_status '
-                            'SET stiched_n_export=1, stiched_modified_load=1 '
-                            'WHERE watershed_basename=? AND fid=?')
-                        LOGGER.debug(
-                            'attempting update %s', update_stiched_record)
-                        cursor.execute(
-                             update_stiched_record, (watershed_basename, fid))
-                        LOGGER.debug(
-                            'updated record! %s %s', watershed_basename, fid)
-                        break
-                    except Exception:
-                        LOGGER.exception(
-                            'exception when updating stiched status')
-                    finally:
-                        connection.commit()
-                        connection.close()
+                    while True:
+                        try:
+                            connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                            cursor = connection.cursor()
+                            update_stiched_record = (
+                                'UPDATE job_status '
+                                'SET stiched=1 '
+                                'WHERE watershed_basename=? AND fid=?')
+                            LOGGER.debug(
+                                'attempting update %s', update_stiched_record)
+                            cursor.execute(
+                                 update_stiched_record, (watershed_basename, fid))
+                            LOGGER.debug(
+                                'updated record! %s %s', watershed_basename, fid)
+                            break
+                        except Exception:
+                            LOGGER.exception(
+                                'exception when updating stiched status')
+                        finally:
+                            connection.commit()
+                            connection.close()
         except Exception:
             LOGGER.exception('exception in stich worker')
 

@@ -243,7 +243,7 @@ def ndr_single_worker(joinable_work_queue, error_queue):
         try:
             watershed_basename, watershed_fid, bucket_uri_prefix = (
                 joinable_work_queue.get())
-            for scenario_id in []:
+            for scenario_id in [x[0] for x in SCENARIO_ID_LULC_FERT_URL_PAIRS]:
                 single_run_ndr(
                     watershed_basename, watershed_fid, bucket_uri_prefix,
                     scenario_id, error_queue)
