@@ -363,18 +363,20 @@ def single_run_ndr(
             check=True)
         shutil.rmtree(args['workspace_dir'])
         os.remove(dem_vrt_path)
+        # strip off the "s3://" part of the uri prefix
         workspace_url = (
             'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-            'watershed_workspaces/%s/%s' %
-            (scenario_id, os.path.basename(zipfile_path)))
+            '%s/%s/%s' % (
+                bucket_uri_prefix[5::], scenario_id,
+                os.path.basename(zipfile_path)))
         os.remove(zipfile_path)
         try:
             head_request = requests.head(workspace_url)
             if not head_request:
                 raise RuntimeError(
                     "something bad happened when checking if url "
-                    "workspace was live: %s %s", workspace_url,
-                    str(head_request))
+                    "workspace was live: %s %s" % (
+                        workspace_url, str(head_request)))
         except ConnectionError:
             LOGGER.exception(
                 'a connection error when checking live url '
