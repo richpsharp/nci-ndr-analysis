@@ -425,7 +425,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
                 for scenario_id, _, _ in SCENARIO_ID_LULC_FERT_URL_PAIRS:
                     zipfile_url = (
                         'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-                        '/ndr_scenarios/%s/%s_%d.zip' % (
+                        'ndr_scenarios/%s/%s_%d.zip' % (
                             scenario_id, watershed_basename, watershed_fid))
                     watershed_url_map[scenario_id] = zipfile_url
                 watershed_fid_url_json_list.append(
