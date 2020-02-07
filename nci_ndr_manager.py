@@ -456,6 +456,7 @@ def processing_complete():
     try:
         payload = flask.request.get_json()
         LOGGER.debug('this was the payload: %s', payload)
+        LOGGER.debug('this is the SCHEDULED_MAP: %s', SCHEDULED_MAP)
         watershed_fid_url_json_list = payload['watershed_fid_url_json_list']
         time_per_area = payload['time_per_area']
         session_id = payload['session_id']
