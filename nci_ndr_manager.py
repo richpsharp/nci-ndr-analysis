@@ -595,6 +595,7 @@ def send_job(watershed_fid_tuple_list):
     try:
         LOGGER.debug('scheduling %s', watershed_fid_tuple_list)
         with APP.app_context():
+            LOGGER.debug('about to get url')
             callback_url = flask.url_for(
                 'processing_complete', _external=True)
         LOGGER.debug('get available worker')
