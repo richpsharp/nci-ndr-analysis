@@ -259,7 +259,8 @@ def create_index(database_path):
         cursor = connection.cursor()
         cursor.executescript(create_index_sql)
     except Exception:
-        LOGGER.exception('exceptionon create_index')
+        LOGGER.exception('exception create_index')
+        raise
     finally:
         connection.commit()
         connection.close()
@@ -503,7 +504,7 @@ def job_status_updater():
             LOGGER.exception('unhandled exception')
 
 
-@retrying.retry()
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
@@ -565,6 +566,7 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
                 total_expected_runtime = 0.0
     except Exception:
         LOGGER.exception('exception in scheduler')
+        raise
 
 
 def reschedule_worker():
@@ -595,8 +597,11 @@ def send_job(watershed_fid_tuple_list):
         with APP.app_context():
             callback_url = flask.url_for(
                 'processing_complete', _external=True)
+        LOGGER.debug('get available worker')
         worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+        LOGGER.debug('this is the worker: %s', worker_ip_port)
         session_id = str(uuid.uuid4())
+        LOGGER.debug('this is the session id: %s', session_id)
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
             'callback_url': callback_url,
