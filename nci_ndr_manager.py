@@ -628,8 +628,8 @@ def send_job(watershed_fid_tuple_list):
                 }
         else:
             raise RuntimeError(str(response))
-    except Exception:
-        LOGGER.debug('in the exception')
+    except Exception as e:
+        LOGGER.debug('in the exception: %s', e)
         LOGGER.exception(
             'something bad happened, on %s for %s',
             worker_ip_port, watershed_fid_tuple_list)
