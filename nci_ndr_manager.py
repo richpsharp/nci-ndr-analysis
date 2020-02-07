@@ -1008,11 +1008,16 @@ def stitch_worker():
         except Exception:
             LOGGER.exception('exception in stich worker')
 
+
 @retrying.retry(
     wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def download_url(source_url, target_path):
     """Wrapper for ecoshard.download_url."""
-    ecoshard.download_url(source_url, target_path)
+    try:
+        ecoshard.download_url(source_url, target_path)
+    except Exception:
+        LOGGER.exception("couldn't download %s->, trying again" % (
+            source_url, target_path))
 
 
 if __name__ == '__main__':
