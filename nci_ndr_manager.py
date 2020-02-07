@@ -671,18 +671,20 @@ def new_host_monitor():
                         LOGGER.exception('something bad happened')
             dead_hosts = GLOBAL_WORKER_STATE_SET.update_host_set(
                 working_host_set)
-            with GLOBAL_LOCK:
-                session_list_to_remove = []
-                for session_id, value in SCHEDULED_MAP.items():
-                    if value['host'] in dead_hosts:
-                        LOGGER.debug(
-                            'found a dead host executing something: %s',
-                            value['host'])
-                        session_list_to_remove.append(session_id)
-                for session_id in session_list_to_remove:
-                    RESCHEDULE_QUEUE.put(
-                        SCHEDULED_MAP[session_id]['watershed_fid_tuple_list'])
-                    del SCHEDULED_MAP[session_id]
+            if dead_hosts:
+                with GLOBAL_LOCK:
+                    session_list_to_remove = []
+                    for session_id, value in SCHEDULED_MAP.items():
+                        if value['host'] in dead_hosts:
+                            LOGGER.debug(
+                                'found a dead host executing something: %s',
+                                value['host'])
+                            session_list_to_remove.append(session_id)
+                    for session_id in session_list_to_remove:
+                        RESCHEDULE_QUEUE.put(
+                            SCHEDULED_MAP[session_id][
+                                'watershed_fid_tuple_list'])
+                        del SCHEDULED_MAP[session_id]
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `new_host_monitor`')
