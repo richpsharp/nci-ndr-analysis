@@ -1018,6 +1018,7 @@ def download_url(source_url, target_path):
     except Exception:
         LOGGER.exception("couldn't download %s->, trying again" % (
             source_url, target_path))
+        raise
 
 
 if __name__ == '__main__':
