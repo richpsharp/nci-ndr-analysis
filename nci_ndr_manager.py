@@ -1039,15 +1039,15 @@ if __name__ == '__main__':
     create_index(STATUS_DATABASE_PATH)
 
     LOGGER.debug('start threading')
-    worker_status_monitor_thread = threading.Thread(
-        target=worker_status_monitor)
-    worker_status_monitor_thread.start()
+    # worker_status_monitor_thread = threading.Thread(
+    #     target=worker_status_monitor)
+    # worker_status_monitor_thread.start()
 
-    # schedule_worker_thread = threading.Thread(
-    #     target=schedule_worker,
-    #     args=(
-    #         args.watershed_fid_immedates, args.max_to_send_to_worker))
-    # schedule_worker_thread.start()
+    schedule_worker_thread = threading.Thread(
+        target=schedule_worker,
+        args=(
+            args.watershed_fid_immedates, args.max_to_send_to_worker))
+    schedule_worker_thread.start()
 
     # new_host_monitor_thread = threading.Thread(
     #     target=new_host_monitor)
