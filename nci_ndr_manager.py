@@ -1083,5 +1083,4 @@ if __name__ == '__main__':
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
-        port=args.app_port,
-        debug=True)
+        port=args.app_port)
