@@ -525,6 +525,8 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
         None.
 
     """
+    # delay so that the webserver can start
+    time.sleep(5.0)
     try:
         LOGGER.debug('launching schedule_worker')
         if not immediate_watershed_fid_list:
@@ -1040,12 +1042,6 @@ if __name__ == '__main__':
         target=worker_status_monitor)
     worker_status_monitor_thread.start()
 
-    schedule_worker_thread = threading.Thread(
-        target=schedule_worker,
-        args=(
-            args.watershed_fid_immedates, args.max_to_send_to_worker))
-    schedule_worker_thread.start()
-
     new_host_monitor_thread = threading.Thread(
         target=new_host_monitor)
     new_host_monitor_thread.start()
@@ -1075,6 +1071,12 @@ if __name__ == '__main__':
     START_COUNT = total_count - int(cursor.fetchone()[0])
     connection.commit()
     connection.close()
+
+    schedule_worker_thread = threading.Thread(
+        target=schedule_worker,
+        args=(
+            args.watershed_fid_immedates, args.max_to_send_to_worker))
+    schedule_worker_thread.start()
 
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
