@@ -694,12 +694,14 @@ def worker_status_monitor():
                     host = value['host']
                     if current_time - value['last_time_accessed']:
                         try:
+                            LOGGER.debug('about to test status')
                             response = requests.get(value['status_url'])
+                            LOGGER.debug('got status')
                             if response.ok:
                                 value['last_time_accessed'] = time.time()
                             else:
                                 raise RuntimeError('response not okay')
-                        except Exception:
+                        except (ConnectionError, Exception):
                             LOGGER.debug(
                                 'failed job: %s on %s',
                                 value['watershed_fid_tuple_list'],
