@@ -707,7 +707,7 @@ def worker_status_monitor():
                                 'failed job: %s on %s',
                                 value['watershed_fid_tuple_list'],
                                 str((session_id, host)))
-                            failed_job_list.put(
+                            failed_job_list.append(
                                 value['watershed_fid_tuple_list'])
                             hosts_to_remove.add((session_id, host))
                 for session_id, host in hosts_to_remove:
