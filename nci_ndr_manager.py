@@ -1039,9 +1039,9 @@ if __name__ == '__main__':
     create_index(STATUS_DATABASE_PATH)
 
     LOGGER.debug('start threading')
-    # worker_status_monitor_thread = threading.Thread(
-    #     target=worker_status_monitor)
-    # worker_status_monitor_thread.start()
+    worker_status_monitor_thread = threading.Thread(
+        target=worker_status_monitor)
+    worker_status_monitor_thread.start()
 
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
@@ -1049,21 +1049,21 @@ if __name__ == '__main__':
             args.watershed_fid_immedates, args.max_to_send_to_worker))
     schedule_worker_thread.start()
 
-    # new_host_monitor_thread = threading.Thread(
-    #     target=new_host_monitor)
-    # new_host_monitor_thread.start()
+    new_host_monitor_thread = threading.Thread(
+        target=new_host_monitor)
+    new_host_monitor_thread.start()
 
-    # job_status_updater_thread = threading.Thread(
-    #     target=job_status_updater)
-    # job_status_updater_thread.start()
+    job_status_updater_thread = threading.Thread(
+        target=job_status_updater)
+    job_status_updater_thread.start()
 
-    # reschedule_worker_thread = threading.Thread(
-    #     target=reschedule_worker)
-    # reschedule_worker_thread.start()
+    reschedule_worker_thread = threading.Thread(
+        target=reschedule_worker)
+    reschedule_worker_thread.start()
 
-    # stitch_worker_process = threading.Thread(
-    #     target=stitch_worker)
-    # stitch_worker_process.start()
+    stitch_worker_process = threading.Thread(
+        target=stitch_worker)
+    stitch_worker_process.start()
 
     START_TIME = time.time()
     ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
@@ -1081,6 +1081,7 @@ if __name__ == '__main__':
 
     LOGGER.debug('start the APP')
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
+    # Note: never run in debug mode because it starts two processes
     APP.run(
         host='0.0.0.0',
         port=args.app_port)
