@@ -918,7 +918,7 @@ def stitch_worker():
                         GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
                         stitch_raster_path, stitch_raster_token_path),
                     target_path_list=[stitch_raster_token_path],
-                    task_name='make base %s' % raster_id)
+                    task_name='make base %s (%s)' % (raster_id, scenario_id))
         task_graph.join()
     except Exception:
         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
