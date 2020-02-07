@@ -80,8 +80,8 @@ SCENARIO_ID_LULC_FERT_URL_PAIRS = [
 
 BIOPHYSICAL_URL = (
     'https://storage.googleapis.com/nci-ecoshards/'
-    'nci-NDR-biophysical_table_ESA_ARIES_RS2_'
-    'md5_18a0595bbc98ea5ad6a359fd3ee368ac.csv')
+    'nci-NDR-biophysical_table_ESA_ARIES_RS3_'
+    'md5_74d69f7e7dc829c52518f46a5a655fb8.csv')
 
 GLOBAL_NDR_ARGS = {
     'threshold_flow_accumulation': 1000,
