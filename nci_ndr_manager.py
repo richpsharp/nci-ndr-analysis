@@ -585,7 +585,7 @@ def reschedule_worker():
             LOGGER.exception('something bad happened in reschedule_worker')
 
 
-@retrying.retry(wait_exponential_multiplier=500, wait_exponential_max=5000)
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
 def send_job(watershed_fid_tuple_list):
     """Send watershed/fid to the global execution pool.
 
@@ -1039,31 +1039,31 @@ if __name__ == '__main__':
     create_index(STATUS_DATABASE_PATH)
 
     LOGGER.debug('start threading')
-    worker_status_monitor_thread = threading.Thread(
-        target=worker_status_monitor)
-    worker_status_monitor_thread.start()
+    # worker_status_monitor_thread = threading.Thread(
+    #     target=worker_status_monitor)
+    # worker_status_monitor_thread.start()
 
-    schedule_worker_thread = threading.Thread(
-        target=schedule_worker,
-        args=(
-            args.watershed_fid_immedates, args.max_to_send_to_worker))
-    schedule_worker_thread.start()
+    # schedule_worker_thread = threading.Thread(
+    #     target=schedule_worker,
+    #     args=(
+    #         args.watershed_fid_immedates, args.max_to_send_to_worker))
+    # schedule_worker_thread.start()
 
-    new_host_monitor_thread = threading.Thread(
-        target=new_host_monitor)
-    new_host_monitor_thread.start()
+    # new_host_monitor_thread = threading.Thread(
+    #     target=new_host_monitor)
+    # new_host_monitor_thread.start()
 
-    job_status_updater_thread = threading.Thread(
-        target=job_status_updater)
-    job_status_updater_thread.start()
+    # job_status_updater_thread = threading.Thread(
+    #     target=job_status_updater)
+    # job_status_updater_thread.start()
 
-    reschedule_worker_thread = threading.Thread(
-        target=reschedule_worker)
-    reschedule_worker_thread.start()
+    # reschedule_worker_thread = threading.Thread(
+    #     target=reschedule_worker)
+    # reschedule_worker_thread.start()
 
-    stitch_worker_process = threading.Thread(
-        target=stitch_worker)
-    stitch_worker_process.start()
+    # stitch_worker_process = threading.Thread(
+    #     target=stitch_worker)
+    # stitch_worker_process.start()
 
     START_TIME = time.time()
     ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
