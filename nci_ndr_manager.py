@@ -489,6 +489,8 @@ def job_status_updater():
                 try:
                     connection = sqlite3.connect(STATUS_DATABASE_PATH)
                     cursor = connection.cursor()
+                    LOGGER.debug(
+                        'inserting this: %s', url_json_watershed_fid_list)
                     cursor.executemany(
                         'UPDATE job_status '
                         'SET workspace_urls_json=?, job_status=\'DEBUG\' '
@@ -502,8 +504,8 @@ def job_status_updater():
                     connection.commit()
                     cursor.close()
                     connection.close()
-            LOGGER.debug('inserting this: %s', url_json_watershed_fid_list)
-            LOGGER.debug('%d inserted', len(url_json_watershed_fid_list))
+                    LOGGER.debug(
+                        '%d inserted', len(url_json_watershed_fid_list))
         except Exception:
             LOGGER.exception('unhandled exception')
 
