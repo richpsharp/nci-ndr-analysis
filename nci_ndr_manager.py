@@ -77,6 +77,8 @@ WGS84_SR.ImportFromEPSG(4326)
 WGS84_WKT = WGS84_SR.ExportToWkt()
 
 WORKER_TAG_ID = 'compute-server'
+# this form must be of 's3://[bucket id]/[subdir]' any change should be updated
+# in the worker when it uploads the zip file
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_scenarios'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
 DEFAULT_MAX_TO_SEND_TO_WORKER = 100
