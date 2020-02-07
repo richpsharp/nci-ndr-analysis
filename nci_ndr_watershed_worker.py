@@ -373,7 +373,8 @@ def single_run_ndr(
             if not head_request:
                 raise RuntimeError(
                     "something bad happened when checking if url "
-                    "workspace was live: %s", str(head_request))
+                    "workspace was live: %s %s", workspace_url,
+                    str(head_request))
         except ConnectionError:
             LOGGER.exception(
                 'a connection error when checking live url '
