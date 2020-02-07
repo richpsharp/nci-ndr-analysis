@@ -693,10 +693,13 @@ def worker_status_monitor():
                 for session_id, value in SCHEDULED_MAP.items():
                     host = value['host']
                     if current_time - value['last_time_accessed']:
-                        response = requests.get(value['status_url'])
-                        if response.ok:
-                            value['last_time_accessed'] = time.time()
-                        else:
+                        try:
+                            response = requests.get(value['status_url'])
+                            if response.ok:
+                                value['last_time_accessed'] = time.time()
+                            else:
+                                raise RuntimeError('response not okay')
+                        except Exception:
                             LOGGER.debug(
                                 'failed job: %s on %s',
                                 value['watershed_fid_tuple_list'],
