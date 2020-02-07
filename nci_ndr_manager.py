@@ -672,11 +672,17 @@ def new_host_monitor():
             dead_hosts = GLOBAL_WORKER_STATE_SET.update_host_set(
                 working_host_set)
             with GLOBAL_LOCK:
-                for host in dead_hosts:
-                    watershed_fid_tuple_list = (
-                        SCHEDULED_MAP[host]['watershed_fid_tuple_list'])
-                    del SCHEDULED_MAP[host]
-                    RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
+                session_list_to_remove = []
+                for session_id, value in SCHEDULED_MAP.items():
+                    if value['host'] in dead_hosts:
+                        LOGGER.debug(
+                            'found a dead host executing something: %s',
+                            value['host'])
+                        session_list_to_remove.append(session_id)
+                for session_id in session_list_to_remove:
+                    RESCHEDULE_QUEUE.put(
+                        SCHEDULED_MAP[session_id]['watershed_fid_tuple_list'])
+                    del SCHEDULED_MAP[session_id]
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `new_host_monitor`')
