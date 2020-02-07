@@ -429,7 +429,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
                         scenario_id, watershed_fid)
                     watershed_url_map[scenario_id] = zipfile_url
                 watershed_fid_url_json_list.append(
-                    (watershed_basename, scenario_id, watershed_fid,
+                    (watershed_basename, watershed_fid,
                      json.dumps(watershed_url_map)))
             single_run_joinable_queue.join()
             error_message = ''
