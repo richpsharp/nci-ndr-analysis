@@ -100,7 +100,7 @@ logging.basicConfig(
         ' [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
-LOGGER.addHandler(logging.FileHandler('log.txt'))
+logging.getLogger('taskgraph').setLevel(logging.INFO)
 
 GLOBAL_LOCK = threading.Lock()
 WORK_QUEUE = queue.Queue()

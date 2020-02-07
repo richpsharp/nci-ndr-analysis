@@ -62,6 +62,7 @@ logging.basicConfig(
         ' [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
+logging.getLogger('taskgraph').setLevel(logging.INFO)
 HOST_FILE_PATH = 'host_file.txt'
 DETECTOR_POLL_TIME = 30.0
 SCHEDULED_MAP = {}
