@@ -36,9 +36,10 @@ import shapely.strtree
 import shapely.wkb
 import taskgraph
 
-from nci_ndr_watershed_worker import SCENARIO_ID_LULC_FERT_URL_PAIRS
-
 gdal.SetCacheMax(2**29)
+
+SCENARIO_ID_LIST = [
+    'baseline', 'ag_expansion', 'ag_intensification', 'restoration']
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -225,7 +226,7 @@ def initialize():
     database_complete_token_path = os.path.join(
         CHURN_DIR, 'create_status_database.COMPLETE')
 
-    create_status_database_task = task_graph.add_task(
+    _ = task_graph.add_task(
         func=create_status_database,
         args=(
             STATUS_DATABASE_PATH, watersheds_unzip_dir, country_borders_path,
@@ -527,7 +528,8 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
         LOGGER.debug('launching schedule_worker')
         if not immediate_watershed_fid_list:
             LOGGER.debug('no predefined watershed fid, use database')
-            ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
+            ro_uri = 'file://%s?mode=ro' % os.path.abspath(
+                STATUS_DATABASE_PATH)
             LOGGER.debug('opening %s', ro_uri)
             connection = sqlite3.connect(ro_uri, uri=True)
             cursor = connection.cursor()
@@ -808,7 +810,8 @@ def execute_sql_on_database(sql_statement, database_path, query=False):
 def stitch_into(master_raster_path, base_raster_path, nodata_value):
     """Stitch `base`into `master` by only overwriting non-nodata values."""
     try:
-        global_raster_info = pygeoprocessing.get_raster_info(master_raster_path)
+        global_raster_info = pygeoprocessing.get_raster_info(
+            master_raster_path)
         global_raster = gdal.OpenEx(
             master_raster_path, gdal.OF_RASTER | gdal.GA_Update)
         global_band = global_raster.GetRasterBand(1)
@@ -898,13 +901,11 @@ def stitch_worker():
     """Mange the stitching of a raster."""
     try:
         stitch_raster_path_map = {}
-        scenario_ids = [
-            x[0] for x in SCENARIO_ID_LULC_FERT_URL_PAIRS]
         task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
         for raster_id, (path_prefix, gdal_type, nodata_value) in (
                 GLOBAL_STITCH_MAP.items()):
             stitch_raster_path_map[raster_id] = {}
-            for scenario_id in scenario_ids:
+            for scenario_id in SCENARIO_ID_LIST:
                 stitch_raster_path = os.path.join(
                     STITCH_DIR, '%s_%s.tif' % (scenario_id, raster_id))
                 stitch_raster_path_map[raster_id][scenario_id] = (
@@ -967,7 +968,8 @@ def stitch_worker():
                             '[FID]', str(fid))
                         local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
                             watershed_basename, fid))
-                        with zipfile.ZipFile(workspace_zip_path, 'r') as zip_ref:
+                        with zipfile.ZipFile(workspace_zip_path, 'r') as \
+                                zip_ref:
                             zip_ref.extract(zipped_path, local_zip_dir)
                         LOGGER.debug(
                             'stitching %s %s in %s', watershed_basename, fid,
@@ -990,9 +992,11 @@ def stitch_worker():
                             LOGGER.debug(
                                 'attempting update %s', update_stiched_record)
                             cursor.execute(
-                                 update_stiched_record, (watershed_basename, fid))
+                                update_stiched_record,
+                                (watershed_basename, fid))
                             LOGGER.debug(
-                                'updated record! %s %s', watershed_basename, fid)
+                                'updated record! %s %s',
+                                watershed_basename, fid)
                             break
                         except Exception:
                             LOGGER.exception(
@@ -1024,7 +1028,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--max_to_send_to_worker', type=int,
         default=DEFAULT_MAX_TO_SEND_TO_WORKER,
-        help='maximum number of jobs to send to each worker, default is %s.' % (
+        help='maximum number of jobs to send to each worker, default: %s.' % (
             DEFAULT_MAX_TO_SEND_TO_WORKER))
     args = parser.parse_args()
 
