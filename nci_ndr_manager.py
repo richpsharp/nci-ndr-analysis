@@ -1033,9 +1033,12 @@ if __name__ == '__main__':
             DEFAULT_MAX_TO_SEND_TO_WORKER))
     args = parser.parse_args()
 
+    LOGGER.debug('initalizing')
     initialize()
+    LOGGER.debug('create database index')
     create_index(STATUS_DATABASE_PATH)
 
+    LOGGER.debug('start threading')
     worker_status_monitor_thread = threading.Thread(
         target=worker_status_monitor)
     worker_status_monitor_thread.start()
@@ -1076,6 +1079,7 @@ if __name__ == '__main__':
     connection.commit()
     connection.close()
 
+    LOGGER.debug('start the APP')
     APP.config.update(SERVER_NAME='%s:%d' % (args.external_ip, args.app_port))
     APP.run(
         host='0.0.0.0',
