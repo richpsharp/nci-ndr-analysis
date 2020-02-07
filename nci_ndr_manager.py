@@ -706,7 +706,7 @@ def worker_status_monitor():
                             LOGGER.debug(
                                 'failed job: %s on %s',
                                 value['watershed_fid_tuple_list'],
-                                str(session_id, host))
+                                str((session_id, host)))
                             failed_job_list.put(
                                 value['watershed_fid_tuple_list'])
                             hosts_to_remove.add((session_id, host))
