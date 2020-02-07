@@ -13,6 +13,7 @@ import logging
 import multiprocessing
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -364,10 +365,12 @@ def single_run_ndr(
         shutil.rmtree(args['workspace_dir'])
         os.remove(dem_vrt_path)
         # strip off the "s3://" part of the uri prefix
+        bucket_id, bucket_subdir = re.match(
+            's3://([^/]*)/(.*)', bucket_uri_prefix).groups()
         workspace_url = (
-            'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+            'https://%s.s3-us-west-1.amazonaws.com/'
             '%s/%s/%s' % (
-                bucket_uri_prefix[5::], scenario_id,
+                bucket_id, bucket_subdir, scenario_id,
                 os.path.basename(zipfile_path)))
         os.remove(zipfile_path)
         try:
