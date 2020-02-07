@@ -447,6 +447,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             }
             LOGGER.debug(
                 'about to callback to this url: %s', callback_url)
+            LOGGER.debug('with this payload: %s', data_payload)
             response = requests.post(callback_url, json=data_payload)
             if not response.ok:
                 raise RuntimeError(
