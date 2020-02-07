@@ -581,7 +581,7 @@ def reschedule_worker():
             LOGGER.exception('something bad happened in reschedule_worker')
 
 
-@retrying.retry(wait_exponential_multiplier=50, wait_exponential_max=2000)
+@retrying.retry(wait_exponential_multiplier=500, wait_exponential_max=5000)
 def send_job(watershed_fid_tuple_list):
     """Send watershed/fid to the global execution pool.
 
