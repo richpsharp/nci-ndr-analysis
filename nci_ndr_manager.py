@@ -39,7 +39,8 @@ import taskgraph
 gdal.SetCacheMax(2**29)
 
 SCENARIO_ID_LIST = [
-    'baseline', 'ag_expansion', 'ag_intensification', 'restoration']
+    'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
+    'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
