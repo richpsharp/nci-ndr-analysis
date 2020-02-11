@@ -931,6 +931,7 @@ def stitch_worker():
             cursor = None
             LOGGER.debug('query string: %s', select_not_processed)
             LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
+            stitched_basename_id_list = []
             for watershed_basename, fid, workspace_urls_json in (
                     update_ws_fid_list):
                 workspace_url_map = json.loads(workspace_urls_json)
@@ -959,30 +960,33 @@ def stitch_worker():
                             local_path, nodata_value)
                     os.remove(workspace_zip_path)
                     shutil.rmtree(local_zip_dir)
+                    stitched_basename_id_list.append((watershed_basename, fid))
 
-                    while True:
-                        try:
-                            connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                            cursor = connection.cursor()
-                            update_stiched_record = (
-                                'UPDATE job_status '
-                                'SET stiched=1 '
-                                'WHERE watershed_basename=? AND fid=?')
-                            LOGGER.debug(
-                                'attempting update %s', update_stiched_record)
-                            cursor.execute(
-                                update_stiched_record,
-                                (watershed_basename, fid))
-                            LOGGER.debug(
-                                'updated record! %s %s',
-                                watershed_basename, fid)
-                            break
-                        except Exception:
-                            LOGGER.exception(
-                                'exception when updating stiched status')
-                        finally:
-                            connection.commit()
-                            connection.close()
+                while True:
+                    try:
+                        connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                        cursor = connection.cursor()
+                        update_stiched_record = (
+                            'UPDATE job_status '
+                            'SET stiched=1 '
+                            'WHERE watershed_basename=? AND fid=?')
+                        LOGGER.debug(
+                            'attempting update %s', update_stiched_record)
+                        cursor.executemany(
+                            update_stiched_record, stitched_basename_id_list)
+                        LOGGER.debug(
+                            'updated record! %s %s',
+                            watershed_basename, fid)
+                        break
+                    except Exception:
+                        LOGGER.exception(
+                            'exception when updating stiched status')
+                    finally:
+                        connection.commit()
+                        connection.close()
+                        LOGGER.debug(
+                            'updated stitch database with %s',
+                            stitched_basename_id_list)
         except Exception:
             LOGGER.exception('exception in stich worker')
 
