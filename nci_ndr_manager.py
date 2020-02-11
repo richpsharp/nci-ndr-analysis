@@ -786,31 +786,6 @@ def make_empty_wgs84_raster(
 
 
 @retrying.retry()
-def execute_sql_on_database(sql_statement, database_path, query=False):
-    """Execute sql_statement on given database path.
-
-    Returns:
-        if query, return a "fetchall" result of the query, else None.
-
-    """
-    try:
-        connection = sqlite3.connect(database_path)
-        cursor = connection.cursor()
-        cursor.executescript(sql_statement)
-        if query:
-            result = list(cursor.fetchall())
-        else:
-            result = None
-        return result
-    except Exception:
-        LOGGER.exception('exception on execute sql statement')
-        raise
-    finally:
-        connection.commit()
-        connection.close()
-
-
-@retrying.retry()
 def stitch_into(master_raster_path, base_raster_path, nodata_value):
     """Stitch `base`into `master` by only overwriting non-nodata values."""
     try:
@@ -939,14 +914,14 @@ def stitch_worker():
 
     while True:
         # update the stitch with the latest.
-        time.sleep(10)
+        time.sleep(1)
         try:
             LOGGER.debug('searching for a new stitch')
             select_not_processed = (
                 'SELECT watershed_basename, fid, workspace_urls_json '
                 'FROM job_status '
                 'WHERE (stiched = 0) '
-                'AND workspace_urls_json IS NOT NULL')
+                'AND workspace_urls_json IS NOT NULL LIMIT 100')
             connection = sqlite3.connect(STATUS_DATABASE_PATH)
             cursor = connection.cursor()
             cursor.execute(select_not_processed)

@@ -471,6 +471,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             LOGGER.exception('something bad happened')
             with GLOBAL_LOCK:
                 JOB_STATUS[session_id] = 'ERROR: %s' % str(e)
+            raise
 
 
 def reproject_geometry_to_target(
