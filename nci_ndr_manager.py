@@ -418,7 +418,6 @@ def processing_status():
             'percent complete: %.2f%% (%d)<br>'
             'total to process: %d<br>'
             'total left to process: %d<br>'
-            'percent stitched: %.2f%% (%d)<br>'
             'approx time left: %s<br>'
             'processing %.2f watersheds every second<br>'
             'uptime: %s<br>'
@@ -426,7 +425,6 @@ def processing_status():
             'ready workers: %d<br>' % (
                 processed_count/total_count*100, processed_count,
                 total_count, total_count - processed_count,
-                stitched_count/total_count*100, stitched_count,
                 approx_time_left_str,
                 processing_rate,
                 uptime_str,
