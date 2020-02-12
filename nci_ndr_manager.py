@@ -14,13 +14,11 @@ import os
 import pathlib
 import queue
 import re
-import shutil
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
-import traceback
 import uuid
 import zipfile
 
@@ -876,119 +874,119 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
         pass  # os.remove(wgs84_base_raster_path)
 
 
-def stitch_worker():
-    """Mange the stitching of a raster."""
-    try:
-        stitch_raster_path_map = {}
-        task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
-        for raster_id, (path_prefix, gdal_type, nodata_value) in (
-                GLOBAL_STITCH_MAP.items()):
-            stitch_raster_path_map[raster_id] = {}
-            for scenario_id in SCENARIO_ID_LIST:
-                stitch_raster_path = os.path.join(
-                    STITCH_DIR, '%s_%s.tif' % (scenario_id, raster_id))
-                stitch_raster_path_map[raster_id][scenario_id] = (
-                    stitch_raster_path)
-                stitch_raster_token_path = '%s.CREATED' % (
-                    os.path.splitext(stitch_raster_path)[0])
-                task_graph.add_task(
-                    func=make_empty_wgs84_raster,
-                    args=(
-                        GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
-                        stitch_raster_path, stitch_raster_token_path),
-                    target_path_list=[stitch_raster_token_path],
-                    task_name='make base %s (%s)' % (raster_id, scenario_id))
-        task_graph.join()
-    except Exception:
-        LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
+# def stitch_worker():
+#     """Mange the stitching of a raster."""
+#     try:
+#         stitch_raster_path_map = {}
+#         task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
+#         for raster_id, (path_prefix, gdal_type, nodata_value) in (
+#                 GLOBAL_STITCH_MAP.items()):
+#             stitch_raster_path_map[raster_id] = {}
+#             for scenario_id in SCENARIO_ID_LIST:
+#                 stitch_raster_path = os.path.join(
+#                     STITCH_DIR, '%s_%s.tif' % (scenario_id, raster_id))
+#                 stitch_raster_path_map[raster_id][scenario_id] = (
+#                     stitch_raster_path)
+#                 stitch_raster_token_path = '%s.CREATED' % (
+#                     os.path.splitext(stitch_raster_path)[0])
+#                 task_graph.add_task(
+#                     func=make_empty_wgs84_raster,
+#                     args=(
+#                         GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
+#                         stitch_raster_path, stitch_raster_token_path),
+#                     target_path_list=[stitch_raster_token_path],
+#                     task_name='make base %s (%s)' % (raster_id, scenario_id))
+#         task_graph.join()
+#     except Exception:
+#         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
 
-    # This section can be uncommented for debugging in the case of wanting to
-    # reset all the stitched rasters
-    # connection = sqlite3.connect(STATUS_DATABASE_PATH)
-    # cursor = connection.cursor()
-    # update_stiched_record = 'UPDATE job_status SET stiched=0 WHERE stiched=1'
-    # cursor.execute(update_stiched_record)
-    # connection.commit()
-    # connection.close()
-    # cursor = None
+#     # This section can be uncommented for debugging in the case of wanting to
+#     # reset all the stitched rasters
+#     # connection = sqlite3.connect(STATUS_DATABASE_PATH)
+#     # cursor = connection.cursor()
+#     # update_stiched_record = 'UPDATE job_status SET stiched=0 WHERE stiched=1'
+#     # cursor.execute(update_stiched_record)
+#     # connection.commit()
+#     # connection.close()
+#     # cursor = None
 
-    while True:
-        # update the stitch with the latest.
-        time.sleep(1)
-        try:
-            LOGGER.debug('searching for a new stitch')
-            select_not_processed = (
-                'SELECT watershed_basename, fid, workspace_urls_json '
-                'FROM job_status '
-                'WHERE (stiched = 0) '
-                'AND workspace_urls_json IS NOT NULL LIMIT 100')
-            connection = sqlite3.connect(STATUS_DATABASE_PATH)
-            cursor = connection.cursor()
-            cursor.execute(select_not_processed)
-            update_ws_fid_list = list(cursor.fetchall())
-            connection.commit()
-            connection.close()
-            cursor = None
-            LOGGER.debug('query string: %s', select_not_processed)
-            LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
-            stitched_basename_id_list = []
-            for watershed_basename, fid, workspace_urls_json in (
-                    update_ws_fid_list):
-                workspace_url_map = json.loads(workspace_urls_json)
-                for scenario_id, workspace_url in workspace_url_map.items():
-                    workspace_zip_path = os.path.join(
-                        STITCH_DIR, os.path.basename(workspace_url))
-                    LOGGER.debug('download url: %s', workspace_url)
-                    download_url(workspace_url, workspace_zip_path)
-                    for raster_id, (path_prefix, gdal_type, nodata_value) in (
-                            GLOBAL_STITCH_MAP.items()):
-                        LOGGER.debug('processing raster %s', raster_id)
-                        zipped_path = path_prefix.replace(
-                            '[BASENAME]', watershed_basename).replace(
-                            '[FID]', str(fid))
-                        local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
-                            watershed_basename, fid))
-                        with zipfile.ZipFile(workspace_zip_path, 'r') as \
-                                zip_ref:
-                            zip_ref.extract(zipped_path, local_zip_dir)
-                        LOGGER.debug(
-                            'stitching %s %s in %s', watershed_basename, fid,
-                            raster_id)
-                        local_path = os.path.join(local_zip_dir, zipped_path)
-                        stitch_into(
-                            stitch_raster_path_map[raster_id][scenario_id],
-                            local_path, nodata_value)
-                    os.remove(workspace_zip_path)
-                    shutil.rmtree(local_zip_dir)
-                    stitched_basename_id_list.append((watershed_basename, fid))
+#     while True:
+#         # update the stitch with the latest.
+#         time.sleep(1)
+#         try:
+#             LOGGER.debug('searching for a new stitch')
+#             select_not_processed = (
+#                 'SELECT watershed_basename, fid, workspace_urls_json '
+#                 'FROM job_status '
+#                 'WHERE (stiched = 0) '
+#                 'AND workspace_urls_json IS NOT NULL LIMIT 100')
+#             connection = sqlite3.connect(STATUS_DATABASE_PATH)
+#             cursor = connection.cursor()
+#             cursor.execute(select_not_processed)
+#             update_ws_fid_list = list(cursor.fetchall())
+#             connection.commit()
+#             connection.close()
+#             cursor = None
+#             LOGGER.debug('query string: %s', select_not_processed)
+#             LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
+#             stitched_basename_id_list = []
+#             for watershed_basename, fid, workspace_urls_json in (
+#                     update_ws_fid_list):
+#                 workspace_url_map = json.loads(workspace_urls_json)
+#                 for scenario_id, workspace_url in workspace_url_map.items():
+#                     workspace_zip_path = os.path.join(
+#                         STITCH_DIR, os.path.basename(workspace_url))
+#                     LOGGER.debug('download url: %s', workspace_url)
+#                     download_url(workspace_url, workspace_zip_path)
+#                     for raster_id, (path_prefix, gdal_type, nodata_value) in (
+#                             GLOBAL_STITCH_MAP.items()):
+#                         LOGGER.debug('processing raster %s', raster_id)
+#                         zipped_path = path_prefix.replace(
+#                             '[BASENAME]', watershed_basename).replace(
+#                             '[FID]', str(fid))
+#                         local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
+#                             watershed_basename, fid))
+#                         with zipfile.ZipFile(workspace_zip_path, 'r') as \
+#                                 zip_ref:
+#                             zip_ref.extract(zipped_path, local_zip_dir)
+#                         LOGGER.debug(
+#                             'stitching %s %s in %s', watershed_basename, fid,
+#                             raster_id)
+#                         local_path = os.path.join(local_zip_dir, zipped_path)
+#                         stitch_into(
+#                             stitch_raster_path_map[raster_id][scenario_id],
+#                             local_path, nodata_value)
+#                     os.remove(workspace_zip_path)
+#                     shutil.rmtree(local_zip_dir)
+#                     stitched_basename_id_list.append((watershed_basename, fid))
 
-                while True:
-                    try:
-                        connection = sqlite3.connect(STATUS_DATABASE_PATH)
-                        cursor = connection.cursor()
-                        update_stiched_record = (
-                            'UPDATE job_status '
-                            'SET stiched=1 '
-                            'WHERE watershed_basename=? AND fid=?')
-                        LOGGER.debug(
-                            'attempting update %s', update_stiched_record)
-                        cursor.executemany(
-                            update_stiched_record, stitched_basename_id_list)
-                        LOGGER.debug(
-                            'updated record! %s %s',
-                            watershed_basename, fid)
-                        break
-                    except Exception:
-                        LOGGER.exception(
-                            'exception when updating stiched status')
-                    finally:
-                        connection.commit()
-                        connection.close()
-                        LOGGER.debug(
-                            'updated stitch database with %s',
-                            stitched_basename_id_list)
-        except Exception:
-            LOGGER.exception('exception in stich worker')
+#                 while True:
+#                     try:
+#                         connection = sqlite3.connect(STATUS_DATABASE_PATH)
+#                         cursor = connection.cursor()
+#                         update_stiched_record = (
+#                             'UPDATE job_status '
+#                             'SET stiched=1 '
+#                             'WHERE watershed_basename=? AND fid=?')
+#                         LOGGER.debug(
+#                             'attempting update %s', update_stiched_record)
+#                         cursor.executemany(
+#                             update_stiched_record, stitched_basename_id_list)
+#                         LOGGER.debug(
+#                             'updated record! %s %s',
+#                             watershed_basename, fid)
+#                         break
+#                     except Exception:
+#                         LOGGER.exception(
+#                             'exception when updating stiched status')
+#                     finally:
+#                         connection.commit()
+#                         connection.close()
+#                         LOGGER.debug(
+#                             'updated stitch database with %s',
+#                             stitched_basename_id_list)
+#         except Exception:
+#             LOGGER.exception('exception in stich worker')
 
 
 @retrying.retry(
@@ -1048,10 +1046,6 @@ if __name__ == '__main__':
     reschedule_worker_thread = threading.Thread(
         target=reschedule_worker)
     reschedule_worker_thread.start()
-
-    stitch_worker_process = threading.Thread(
-        target=stitch_worker)
-    stitch_worker_process.start()
 
     START_TIME = time.time()
     ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
