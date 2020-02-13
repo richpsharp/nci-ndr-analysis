@@ -312,8 +312,14 @@ def schedule_worker():
         connection.close()
 
         for job_tuple in payload_list:
-            LOGGER.debug('scheduling %s', job_tuple)
-            send_job(job_tuple)
+            job_payload = {
+                'scenario_id': job_tuple[0],
+                'raster_id': job_tuple[1],
+                'ul_grid_lng': job_tuple[2],
+                'ul_grid_lat': job_tuple[3],
+            }
+            LOGGER.debug('scheduling %s', job_payload)
+            send_job(job_payload)
 
     except Exception:
         LOGGER.exception('exception in scheduler')
@@ -346,11 +352,11 @@ def processing_complete():
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
-def send_job(job_tuple):
+def send_job(job_payload):
     """Send a job tuple to the worker pool.
 
     Parameters:
-        job_tuple (tuple): a tuple with information to send to the worker
+        job_payload (dict): a dictionary with information to send to the worker
             process. This description is general so it's easy to change the
             data without changing the pipeline.
 
@@ -359,7 +365,7 @@ def send_job(job_tuple):
 
     """
     try:
-        LOGGER.debug('scheduling %s', job_tuple)
+        LOGGER.debug('scheduling %s', job_payload)
         with APP.app_context():
             LOGGER.debug('about to get url')
             callback_url = flask.url_for(
@@ -370,7 +376,7 @@ def send_job(job_tuple):
         session_id = str(uuid.uuid4())
         LOGGER.debug('this is the session id: %s', session_id)
         data_payload = {
-            'job_tuple': job_tuple,
+            'job_payload': job_payload,
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
             'session_id': session_id,
@@ -385,10 +391,10 @@ def send_job(job_tuple):
         response = requests.post(
             worker_rest_url, json=data_payload)
         if response.ok:
-            LOGGER.debug('%s scheduled', job_tuple)
+            LOGGER.debug('%s scheduled', job_payload)
             SCHEDULED_MAP[session_id] = {
                 'status_url': response.json()['status_url'],
-                'job_tuple': job_tuple,
+                'job_payload': job_payload,
                 'last_time_accessed': time.time(),
                 'host': worker_ip_port
             }
