@@ -37,24 +37,16 @@ import taskgraph
 gdal.SetCacheMax(2**29)
 
 
-SCENARIO_ID_LIST = [
-    'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
-    'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
-
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'watersheds_globe_HydroSHEDS_15arcseconds_'
     'blake2b_14ac9c77d2076d51b0258fd94d9378d4.zip')
 
-COUNTRY_BORDERS_URL = (
-    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-    'world_borders_md5_c8dd971a8a853b2f3e1d3801b9747d5f.gpkg')
-
 WORKSPACE_DIR = 'nci_stitcher_workspace'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
-DATABSE_TOKEN_PATH = os.path.join(
+DATABASE_TOKEN_PATH = os.path.join(
     CHURN_DIR, '%s.CREATED' % os.path.basename(STATUS_DATABASE_PATH))
 
 logging.basicConfig(
@@ -65,22 +57,17 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 logging.getLogger('taskgraph').setLevel(logging.INFO)
-HOST_FILE_PATH = 'host_file.txt'
+
 DETECTOR_POLL_TIME = 30.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
-GLOBAL_READY_HOST_SET = set()  # hosts that are ready to do work
-GLOBAL_RUNNING_HOST_SET = set()  # hosts that are active
-GLOBAL_FAILED_HOST_SET = set()  # hosts that failed to connect or other error
 RESULT_QUEUE = queue.Queue()
 RESCHEDULE_QUEUE = queue.Queue()
-TIME_PER_AREA = 1e8
-TIME_PER_WORKER = 10 * 60
 WGS84_SR = osr.SpatialReference()
 WGS84_SR.ImportFromEPSG(4326)
 WGS84_WKT = WGS84_SR.ExportToWkt()
 
-WORKER_TAG_ID = 'compute-server'
+WORKER_TAG_ID = 'ndr-nci-stitcher-worker'
 # this form must be of 's3://[bucket id]/[subdir]' any change should be updated
 # in the worker when it uploads the zip file
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_scenarios'
@@ -442,8 +429,8 @@ if __name__ == '__main__':
     task_graph = taskgraph.TaskGraph(CHURN_DIR, -1)
     task_graph.add_task(
         func=create_status_database,
-        args=(STATUS_DATABASE_PATH, DATABSE_TOKEN_PATH),
-        target_path_list=[DATABSE_TOKEN_PATH],
+        args=(STATUS_DATABASE_PATH, DATABASE_TOKEN_PATH),
+        target_path_list=[DATABASE_TOKEN_PATH],
         ignore_path_list=[STATUS_DATABASE_PATH],
         task_name='create status database')
 
