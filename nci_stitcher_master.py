@@ -85,7 +85,6 @@ WORKER_TAG_ID = 'compute-server'
 # in the worker when it uploads the zip file
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_scenarios'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
-DEFAULT_MAX_TO_SEND_TO_WORKER = 100
 
 APP = flask.Flask(__name__)
 
@@ -301,6 +300,124 @@ def create_status_database(database_path, complete_token_path):
     connection.close()
 
 
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
+def schedule_worker():
+    """Monitors STATUS_DATABASE_PATH and schedules work.
+
+    Returns:
+        None.
+
+    """
+    try:
+        LOGGER.debug('launching schedule_worker')
+        ro_uri = pathlib.Path(os.path.abspath(
+            STATUS_DATABASE_PATH)).as_uri() + '?mode=ro'
+        LOGGER.debug('opening %s', ro_uri)
+        connection = sqlite3.connect(ro_uri, uri=True)
+        cursor = connection.cursor()
+        LOGGER.debug('querying unstitched')
+        cursor.execute(
+            'SELECT scenario_id, raster_id, ul_grid_lng, ul_grid_lat '
+            'FROM job_status '
+            'WHERE stiched=0')
+        payload_list = list(cursor.fetchall())
+        connection.commit()
+        connection.close()
+
+        for job_tuple in payload_list:
+            LOGGER.debug('scheduling %s', job_tuple)
+            send_job(job_tuple)
+
+    except Exception:
+        LOGGER.exception('exception in scheduler')
+        raise
+
+
+@APP.route('/api/v1/processing_complete', methods=['POST'])
+def processing_complete():
+    """Invoked when processing is complete for given watershed.
+
+    Body of the post includs a url to the stored .zip file of the archive.
+
+    Returns
+        None.
+
+    """
+    try:
+        payload = flask.request.get_json()
+        LOGGER.debug('this was the payload: %s', payload)
+        session_id = payload['session_id']
+        host = SCHEDULED_MAP[session_id]['host']
+        del SCHEDULED_MAP[session_id]
+        RESULT_QUEUE.put(payload)
+        GLOBAL_WORKER_STATE_SET.set_ready_host(host)
+        return 'complete', 202
+    except Exception:
+        LOGGER.exception(
+            'error on processing completed for host %s. session_ids: %s',
+            flask.request.remote_addr, str(SCHEDULED_MAP))
+
+
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
+def send_job(job_tuple):
+    """Send a job tuple to the worker pool.
+
+    Parameters:
+        job_tuple (tuple): a tuple with information to send to the worker
+            process. This description is general so it's easy to change the
+            data without changing the pipeline.
+
+    Returns:
+        None.
+
+    """
+    try:
+        LOGGER.debug('scheduling %s', job_tuple)
+        with APP.app_context():
+            LOGGER.debug('about to get url')
+            callback_url = flask.url_for(
+                'processing_complete', _external=True)
+        LOGGER.debug('get available worker')
+        worker_ip_port = GLOBAL_WORKER_STATE_SET.get_ready_host()
+        LOGGER.debug('this is the worker: %s', worker_ip_port)
+        session_id = str(uuid.uuid4())
+        LOGGER.debug('this is the session id: %s', session_id)
+        data_payload = {
+            'job_tuple': job_tuple,
+            'callback_url': callback_url,
+            'bucket_uri_prefix': BUCKET_URI_PREFIX,
+            'session_id': session_id,
+        }
+
+        LOGGER.debug('payload: %s', data_payload)
+        LOGGER.debug('got this worker: %s', worker_ip_port)
+        worker_rest_url = (
+            'http://%s/api/v1/stitch_grid_cell' % worker_ip_port)
+        LOGGER.debug(
+            'sending job %s to %s', data_payload, worker_rest_url)
+        response = requests.post(
+            worker_rest_url, json=data_payload)
+        if response.ok:
+            LOGGER.debug('%s scheduled', job_tuple)
+            SCHEDULED_MAP[session_id] = {
+                'status_url': response.json()['status_url'],
+                'job_tuple': job_tuple,
+                'last_time_accessed': time.time(),
+                'host': worker_ip_port
+            }
+        else:
+            raise RuntimeError(str(response))
+    except Exception as e:
+        LOGGER.debug('in the exception: %s', e)
+        LOGGER.exception(
+            'something bad happened, on %s for %s', worker_ip_port, job_tuple)
+        LOGGER.debug('removing %s from worker set', worker_ip_port)
+        GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
+        raise
+    finally:
+        LOGGER.debug('in the finally')
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='NCI NDR Stitching.')
@@ -327,6 +444,7 @@ if __name__ == '__main__':
         func=create_status_database,
         args=(STATUS_DATABASE_PATH, DATABSE_TOKEN_PATH),
         target_path_list=[DATABSE_TOKEN_PATH],
+        ignore_path_list=[STATUS_DATABASE_PATH],
         task_name='create status database')
 
     LOGGER.debug('start threading')
@@ -334,6 +452,10 @@ if __name__ == '__main__':
         target=new_host_monitor,
         args=(args.worker_list,))
     new_host_monitor_thread.start()
+
+    scheduling_thread = threading.Thread(
+        target=schedule_worker)
+    scheduling_thread.start()
 
     START_TIME = time.time()
     LOGGER.debug('start the APP')

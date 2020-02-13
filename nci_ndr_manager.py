@@ -425,6 +425,7 @@ def processing_status():
             'ready workers: %d<br>' % (
                 processed_count/total_count*100, processed_count,
                 total_count, total_count - processed_count,
+                stitched_count/total_count*100, stitched_count,
                 approx_time_left_str,
                 processing_rate,
                 uptime_str,
