@@ -48,6 +48,8 @@ CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
 DATABASE_TOKEN_PATH = os.path.join(
     CHURN_DIR, '%s.CREATED' % os.path.basename(STATUS_DATABASE_PATH))
+GRID_STEP_SIZE = 2
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -256,8 +258,10 @@ def create_status_database(database_path, complete_token_path):
         CREATE TABLE job_status (
             scenario_id TEXT NOT NULL,
             raster_id TEXT NOT NULL,
-            ul_grid_lng FLOAT NOT NULL,
-            ul_grid_lat FLOAT NOT NULL,
+            lng_min FLOAT NOT NULL,
+            lat_min FLOAT NOT NULL,
+            lng_max FLOAT NOT NULL,
+            lat_max FLOAT NOT NULL,
             stiched INT NOT NULL);
         """)
     if os.path.exists(database_path):
@@ -272,14 +276,17 @@ def create_status_database(database_path, complete_token_path):
     for scenario_id in SCENARIO_ID_LIST:
         GLOBAL_STATUS[scenario_id] = {}
         for raster_id in GLOBAL_STITCH_MAP:
-            for lat in reversed(range(90, -90, -1)):
-                for lng in range(-180, 180):
+            for lat_min in reversed(range(90, -90, -GRID_STEP_SIZE)):
+                lat_max = lat_min + GRID_STEP_SIZE
+                for lng_max in range(-180, 180, GRID_STEP_SIZE):
+                    lng_min = lng_max - GRID_STEP_SIZE
                     scenario_output_lat_lng_list.append(
-                        (scenario_id, raster_id, lat, lng))
+                        (scenario_id, raster_id, lng_min, lat_min,
+                         lng_max, lat_max))
     insert_query = (
         'INSERT INTO job_status('
-        'scenario_id, raster_id, ul_grid_lng, ul_grid_lat, stiched)'
-        'VALUES (?, ?, ?, ?, 0)')
+        'scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, stiched) '
+        'VALUES (?, ?, ?, ?, ?, ?, 0)')
     cursor.executemany(insert_query, scenario_output_lat_lng_list)
     with open(complete_token_path, 'w') as complete_token_file:
         complete_token_file.write(str(datetime.datetime.now()))
@@ -380,6 +387,7 @@ def send_job(job_payload):
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
             'session_id': session_id,
+            'wgs84_pixel_size': GLOBAL_STITCH_WGS84_CELL_SIZE,
         }
 
         LOGGER.debug('payload: %s', data_payload)
