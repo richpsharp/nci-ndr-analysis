@@ -195,7 +195,6 @@ if __name__ == '__main__':
     raster_path_base_list = [
         'n_export.tif',
         'intermediate_outputs/modified_load_n.tif',
-        'intermediate_outputs/stream.tif',
         ]
     global_raster_info_map = {}
     for raster_path_pattern in raster_path_base_list:
