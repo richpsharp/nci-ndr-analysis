@@ -311,7 +311,8 @@ def schedule_worker():
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
         cursor.execute(
-            'SELECT scenario_id, raster_id, ul_grid_lng, ul_grid_lat '
+            'SELECT scenario_id, raster_id, '
+            'lng_min, lat_min, lng_max, lat_max '
             'FROM job_status '
             'WHERE stiched=0')
         payload_list = list(cursor.fetchall())
@@ -322,8 +323,10 @@ def schedule_worker():
             job_payload = {
                 'scenario_id': job_tuple[0],
                 'raster_id': job_tuple[1],
-                'ul_grid_lng': job_tuple[2],
-                'ul_grid_lat': job_tuple[3],
+                'lng_min': job_tuple[2],
+                'lat_min': job_tuple[3],
+                'lng_max': job_tuple[4],
+                'lat_max': job_tuple[5],
             }
             LOGGER.debug('scheduling %s', job_payload)
             send_job(job_payload)

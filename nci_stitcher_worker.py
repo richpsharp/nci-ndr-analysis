@@ -133,8 +133,36 @@ def stitcher_worker():
                 'session_id': payload['session_id'],
             }
 
-            LOGGER.warning('TODO: no work being done yet but it would go here')
+            job_payload = payload['job_payload']
 
+            # make a new empty raster
+            lng_min = job_payload['lng_min']
+            lat_min = job_payload['lat_min']
+            lng_max = job_payload['lng_max']
+            lat_max = job_payload['lat_max']
+            n_rows = int((lat_max - lat_min) / payload['wgs84_pixel_size'])
+            n_cols = int((lng_max - lng_min) / payload['wgs84_pixel_size'])
+
+            geotransform = [lng_min, payload['wgs84_pixel_size'], 0.0,
+                            lat_max, 0, -payload['wgs84_pixel_size']]
+            wgs84_srs = osr.SpatialReference()
+            wgs84_srs.ImportFromEPSG(4326)
+
+            stitch_raster_path = os.path.join(
+                WORKSPACE_DIR, '%f_%f_%f_%f.tif' % (
+                    lng_min, lat_min, lng_max, lat_max))
+            gtiff_driver = gdal.GetDriverByName('GTiff')
+            stitch_raster = gtiff_driver.Create(
+                stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
+                options=[
+                    'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=LZW',
+                    'SPARSE_OK=TRUE'])
+            stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
+            stitch_raster.SetGeoTransform(geotransform)
+            stitch_band = stitch_raster.GetRasterBand(1)
+            stitch_band.Fill(lng_min*lat_min)
+
+            LOGGER.warning('TODO: no work being done yet but it would go here')
             LOGGER.debug(
                 'about to callback to this url: %s', payload['callback_url'])
             LOGGER.debug('with this payload: %s', data_payload)
