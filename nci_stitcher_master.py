@@ -276,10 +276,10 @@ def create_status_database(database_path, complete_token_path):
     for scenario_id in SCENARIO_ID_LIST:
         GLOBAL_STATUS[scenario_id] = {}
         for raster_id in GLOBAL_STITCH_MAP:
-            for lat_min in reversed(range(90, -90, -GRID_STEP_SIZE)):
-                lat_max = lat_min + GRID_STEP_SIZE
-                for lng_max in range(-180, 180, GRID_STEP_SIZE):
-                    lng_min = lng_max - GRID_STEP_SIZE
+            for lat_max in reversed(range(90, -90, -GRID_STEP_SIZE)):
+                lat_min = lat_max - GRID_STEP_SIZE
+                for lng_min in range(-180, 180, GRID_STEP_SIZE):
+                    lng_max = lng_min + GRID_STEP_SIZE
                     scenario_output_lat_lng_list.append(
                         (scenario_id, raster_id, lng_min, lat_min,
                          lng_max, lat_max))
@@ -313,8 +313,7 @@ def schedule_worker():
         cursor.execute(
             'SELECT scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
-            'FROM job_status '
-            'WHERE stiched=0')
+            'FROM job_status WHERE stiched=0')
         payload_list = list(cursor.fetchall())
         connection.commit()
         connection.close()

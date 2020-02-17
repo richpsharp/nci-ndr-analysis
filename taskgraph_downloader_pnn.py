@@ -77,6 +77,7 @@ class TaskGraphDownloader(object):
             None.
 
         """
+        LOGGER.debug('download ecoshard %s', ecoshard_url)
         if key in self.key_to_path_task_map:
             raise ValueError(
                 '"%s" is already a registered ecoshard as %s' % (
@@ -99,10 +100,11 @@ class TaskGraphDownloader(object):
             local_ecoshard_path = os.path.join(
                 self.download_dir, os.path.splitext(
                     os.path.basename(ecoshard_url))[0])
+            gunzipped_file = os.path.splitext(local_ecoshard_path)[0]
             download_task = self.task_graph.add_task(
                 func=download_and_ungzip,
                 args=(ecoshard_url, local_ecoshard_path),
-                target_path_list=[local_ecoshard_path],
+                target_path_list=[gunzipped_file],
                 task_name='download %s' % local_ecoshard_path)
         elif decompress == 'unzip':
             unzip_token_path = os.path.join(
@@ -161,7 +163,11 @@ def download_and_unzip(url, target_dir, target_token_path):
         url (str); url to zipped file.
         target_dir (str): directory to download the `url` to and to later
             decompress the zip file to.
+        target_token_path (str): path to a file that will be created
+            when the ecoshard is decompressed and removed.
 
+    Returns:
+        None
 
     """
     try:
