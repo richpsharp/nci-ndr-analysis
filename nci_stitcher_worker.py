@@ -116,14 +116,14 @@ def get_status(session_id):
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
-def stitcher_worker(watershed_index):
+def stitcher_worker(watershed_r_tree):
     """Run the NDR model.
 
     Runs NDR with the given watershed/fid and uses data previously synchronized
     when the module started.
 
     Paramters:
-        watershed_index (rtree.index.Index): rtree that contains an object
+        watershed_r_tree (rtree.index.Index): rtree that contains an object
             with keys:
                 shapely_obj: a shapely object that is the geometry of the
                     watershed
@@ -175,7 +175,7 @@ def stitcher_worker(watershed_index):
             stitch_band = stitch_raster.GetRasterBand(1)
 
             # find all the watersheds that overlap this grid cell
-            for obj in watershed_index.intersection(
+            for obj in watershed_r_tree.intersection(
                     (lng_min, lat_min, lng_max, lat_max), objects=True):
                 LOGGER.debug(obj)
 
