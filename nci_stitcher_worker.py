@@ -133,6 +133,7 @@ def stitcher_worker(watershed_r_tree):
         None.
 
     """
+    path_to_watershed_vector_map = {}
     while True:
         try:
             payload = WORK_QUEUE.get()
@@ -175,8 +176,22 @@ def stitcher_worker(watershed_r_tree):
             stitch_band = stitch_raster.GetRasterBand(1)
 
             # find all the watersheds that overlap this grid cell
+            bounding_box = shapely.geometry.box(
+                lng_min, lat_min, lng_max, lat_max)
             for obj in watershed_r_tree.intersection(
-                    (lng_min, lat_min, lng_max, lat_max), objects=True):
+                    bounding_box.bounds, objects=True):
+                if obj['path'] not in path_to_watershed_vector_map:
+                    path_to_watershed_vector_map[obj['path']] = (
+                        gdal.OpenEx(obj['path'], gdal.OF_VECTOR))
+                layer = path_to_watershed_vector_map[obj['path']].GetLayer()
+                feature = layer.GetFeature(obj['fid'])
+                geom = feature.GetGeometryRef()
+                geom_shapely = shapely.wkb.loads(geom.ExportToWkb())
+                if geom_shapely.intersects(bounding_box):
+                    LOGGER.debug("intersection!")
+                else:
+                    LOGGER.debug('no intersection')
+
                 LOGGER.debug(obj)
 
             LOGGER.warning('TODO: no work being done yet but it would go here')
@@ -287,7 +302,8 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
         pass  # os.remove(wgs84_base_raster_path)
 
 
-def build_watershed_index(watershed_path_list, index_base_file_path):
+def build_watershed_index(
+        watershed_path_list, index_base_file_path, index_target_file):
     """Build an RTree index of watershed geometry.
 
     Parameters:
@@ -322,6 +338,8 @@ def build_watershed_index(watershed_path_list, index_base_file_path):
             watershed_shapely = None
     LOGGER.info('build the index')
     rtree.index.Index(index_base_file_path, watershed_list)
+    with open(index_target_file, 'w') as index_file:
+        index_file.write(datetime.datetime.now())
     LOGGER.info('index all done')
 
 
@@ -351,16 +369,18 @@ if __name__ == '__main__':
     LOGGER.debug('build watershed')
     watershed_index_basename_path = os.path.join(
         WORKSPACE_DIR, 'watershed_index')
+    watershed_path_list = list(glob.glob(os.path.join(
+        tdd_downloader.get_path('watersheds'), '*.shp')))
+    LOGGER.debug('watershed path list: %s', watershed_path_list)
+    index_token_path = os.path.join(CHURN_DIR, 'index.COMPLETE')
     build_watershed_index_task = task_graph.add_task(
         func=build_watershed_index,
         args=(
-            list(glob.glob(os.path.join(
-                tdd_downloader.get_path('watersheds'), '*.shp'))),
-            watershed_index_basename_path),
+            watershed_path_list, watershed_index_basename_path,
+            index_token_path),
         ignore_path_list=[
             watershed_index_basename_path + x for x in ['.dat', '.idx']],
-        target_path_list=[
-            watershed_index_basename_path + x for x in ['.dat', '.idx']],
+        target_path_list=[index_token_path],
         task_name='make index')
 
     build_watershed_index_task.join()
