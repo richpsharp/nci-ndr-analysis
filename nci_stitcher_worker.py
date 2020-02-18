@@ -169,28 +169,28 @@ def stitcher_worker(watershed_r_tree):
             wgs84_srs.ImportFromEPSG(4326)
 
             global_raster_info_map = {}
-            for raster_subpath in RASTER_PATH_BASE_LIST:
-                raster_base_id = os.path.basename(
-                    os.path.splitext(raster_subpath)[0])
-
-                stitch_raster_path = os.path.join(
-                    WORKSPACE_DIR, '%f_%f_%f_%f_%s.tif' % (
-                        lng_min, lat_min, lng_max, lat_max, raster_base_id))
-                gtiff_driver = gdal.GetDriverByName('GTiff')
-                stitch_raster = gtiff_driver.Create(
-                    stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
-                    options=[
-                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=LZW',
-                        'SPARSE_OK=TRUE'])
-                stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
-                stitch_raster.SetGeoTransform(geotransform)
-                stitch_band = stitch_raster.GetRasterBand(1)
-                stitch_band.FlushCache()
-                global_raster_info_map[raster_base_id] = {
-                    'raster': stitch_raster,
-                    'band': stitch_band,
-                    'info': pygeoprocessing.get_raster_info(stitch_raster_path)
-                }
+            raster_base_id = os.path.basename(
+                os.path.splitext(job_payload['raster_id'])[0])
+            scenario_id = job_payload['scenario_id']
+            stitch_raster_path = os.path.join(
+                WORKSPACE_DIR, '%f_%f_%f_%f_%s_%s.tif' % (
+                    lng_min, lat_min, lng_max, lat_max, raster_base_id,
+                    scenario_id))
+            gtiff_driver = gdal.GetDriverByName('GTiff')
+            stitch_raster = gtiff_driver.Create(
+                stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
+                options=[
+                    'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=LZW',
+                    'SPARSE_OK=TRUE'])
+            stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
+            stitch_raster.SetGeoTransform(geotransform)
+            stitch_band = stitch_raster.GetRasterBand(1)
+            stitch_band.FlushCache()
+            global_raster_info_map[raster_base_id] = {
+                'raster': stitch_raster,
+                'band': stitch_band,
+                'info': pygeoprocessing.get_raster_info(stitch_raster_path)
+            }
 
             # find all the watersheds that overlap this grid cell
             bounding_box = shapely.geometry.box(
@@ -323,7 +323,7 @@ def stitcher_worker(watershed_r_tree):
                             watershed_id))
 
 
-                LOGGER.debug('for each sub-raster, stitch it: warp it, ')
+            LOGGER.debug('for each sub-raster, stitch it: warp it, ')
 
             LOGGER.warning('TODO: no work being done yet but it would go here')
             LOGGER.debug(
