@@ -7,6 +7,7 @@ import datetime
 import glob
 import logging
 import os
+import pathlib
 import queue
 import shutil
 import sys
@@ -165,12 +166,11 @@ def stitcher_worker(watershed_r_tree):
             wgs84_srs.ImportFromEPSG(4326)
 
             global_raster_info_map = {}
-            raster_base_id = os.path.basename(
-                os.path.splitext(job_payload['raster_id'])[0])
+            raster_id = job_payload['raster_id']
             scenario_id = job_payload['scenario_id']
             stitch_raster_path = os.path.join(
                 WORKSPACE_DIR, '%f_%f_%f_%f_%s_%s.tif' % (
-                    lng_min, lat_min, lng_max, lat_max, raster_base_id,
+                    lng_min, lat_min, lng_max, lat_max, raster_id,
                     scenario_id))
             gtiff_driver = gdal.GetDriverByName('GTiff')
             stitch_raster = gtiff_driver.Create(
@@ -184,7 +184,7 @@ def stitcher_worker(watershed_r_tree):
             stitch_band.SetNoDataValue(GLOBAL_NODATA_VAL)
             stitch_band.FlushCache()
             stitch_raster.FlushCache()
-            global_raster_info_map[raster_base_id] = {
+            global_raster_info_map[raster_id] = {
                 'raster': stitch_raster,
                 'band': stitch_band,
                 'info': pygeoprocessing.get_raster_info(stitch_raster_path)
@@ -222,25 +222,31 @@ def stitcher_worker(watershed_r_tree):
 
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
 
-                global_band = global_raster_info_map[raster_base_id]['band']
+                global_band = global_raster_info_map[raster_id]['band']
                 global_raster_info = \
-                    global_raster_info_map[raster_base_id]['info']
+                    global_raster_info_map[raster_id]['info']
 
                 global_inv_gt = gdal.InvGeoTransform(
                     global_raster_info['geotransform'])
+
+                watershed_raster_path = str(next(
+                    pathlib.Path(tdd_downloader.get_path(watershed_id)).rglob(
+                        '%s.tif' % raster_id)))
+
                 stitch_raster_info = pygeoprocessing.get_raster_info(
-                    stitch_raster_path)
+                    watershed_raster_path)
                 warp_raster_path = os.path.join(
                     WARP_DIR, '%s_%s' % (
-                        watershed_id, os.path.basename(stitch_raster_path)))
+                        watershed_id, os.path.basename(watershed_raster_path)))
                 warp_task = task_graph.add_task(
                     func=pygeoprocessing.warp_raster,
                     args=(
-                        stitch_raster_path, global_raster_info['pixel_size'],
-                        warp_raster_path, 'near'),
+                        watershed_raster_path,
+                        global_raster_info['pixel_size'], warp_raster_path,
+                        'near'),
                     kwargs={'target_sr_wkt': global_raster_info['projection']},
                     target_path_list=[warp_raster_path],
-                    task_name='warp %s' % stitch_raster_path)
+                    task_name='warp %s' % watershed_raster_path)
                 warp_task.join()
                 warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
                 warp_bb = warp_info['bounding_box']
@@ -311,12 +317,12 @@ def stitcher_worker(watershed_r_tree):
                     global_array, xoff=global_i_min, yoff=global_j_min)
                 global_band = None
 
-            try:
-                shutil.rmtree(tdd_downloader.get_path(watershed_id))
-            except OSError:
-                LOGGER.warn(
-                    "couldn't remove %s" % tdd_downloader.get_path(
-                        watershed_id))
+                try:
+                    tdd_downloader.remove_files(watershed_id)
+                except OSError:
+                    LOGGER.warn(
+                        "couldn't remove %s" % tdd_downloader.get_path(
+                            watershed_id))
 
             LOGGER.debug('for each sub-raster, stitch it: warp it, ')
 
@@ -356,7 +362,7 @@ def download_watershed(watershed_url, watershed_id, tdd_downloader):
             response.raise_for_status()
             tdd_downloader.download_ecoshard(
                 watershed_url, watershed_id, decompress='unzip',
-                local_path='workspace_worker/%s' % watershed_id)
+                local_path=os.path.join('workspace_worker', watershed_id))
             task_graph.join()
         except requests.exceptions.HTTPError:
             # probably not a workspace we processed

@@ -39,13 +39,13 @@ class TaskGraphDownloader(object):
             LOGGER.debug('no taskgraph object, creating internal one')
             self.task_graph = taskgraph.TaskGraph(
                 taskgraph_object_or_dir, n_workers)
+        self.download_dir = download_dir
         # this will be a dictionary indexed by ecoshard key to a dict
         # containing fields:
         #   'url': the original url
         #   'local_path': path to local file/dir
         #   'download_task': the taskgraph.Task object used to fetch the
         #         ecoshard
-        self.download_dir = download_dir
         self.key_to_path_task_map = {}
 
     def __del__(self):
@@ -82,7 +82,7 @@ class TaskGraphDownloader(object):
             raise ValueError(
                 '"%s" is already a registered ecoshard as %s' % (
                     key, self.key_to_path_task_map[key]['url']))
-
+        created_files_list = []
         if decompress == 'none':
             local_ecoshard_path = os.path.join(
                 self.download_dir, os.path.basename(ecoshard_url))
@@ -91,21 +91,22 @@ class TaskGraphDownloader(object):
                 args=(ecoshard_url, local_ecoshard_path),
                 target_path_list=[local_ecoshard_path],
                 task_name='download %s' % local_ecoshard_path)
+            created_files_list.append(local_ecoshard_path)
         elif decompress == 'gunzip':
             # ecoshard should end in .gz
             if not ecoshard_url.endswith('.gz'):
                 raise ValueError(
                     'request to gunzip but %s does not end in .gz '
                     'extension' % ecoshard_url)
-            local_ecoshard_path = os.path.join(
-                self.download_dir, os.path.splitext(
-                    os.path.basename(ecoshard_url))[0])
-            gunzipped_file = os.path.splitext(local_ecoshard_path)[0]
+            gzipfile_path = os.path.join(
+                self.download_dir, os.path.basename(ecoshard_url))
+            gunzipped_file_path = os.path.splitext(gzipfile_path)[0]
             download_task = self.task_graph.add_task(
                 func=download_and_ungzip,
-                args=(ecoshard_url, local_ecoshard_path),
-                target_path_list=[gunzipped_file],
+                args=(ecoshard_url, gzipfile_path),
+                target_path_list=[gzipfile_path, gunzipped_file_path],
                 task_name='download %s' % local_ecoshard_path)
+            created_files_list.extend([gzipfile_path, gunzipped_file_path])
         elif decompress == 'unzip':
             unzip_token_path = os.path.join(
                 self.download_dir, '%s.UNZIPTOKEN' % os.path.basename(
@@ -117,6 +118,10 @@ class TaskGraphDownloader(object):
                 target_path_list=[unzip_token_path],
                 task_name='download %s' % os.path.basename(ecoshard_url))
             download_task.join()
+            created_files_list.append(
+                zipfile.ZipFile(os.path.join(
+                    self.download_dir, os.path.basename(ecoshard_url)), 'r'))
+            created_files_list.append(unzip_token_path)
             if local_path:
                 local_ecoshard_path = os.path.join(
                     self.download_dir, local_path)
@@ -124,7 +129,8 @@ class TaskGraphDownloader(object):
         self.key_to_path_task_map[key] = {
             'url': ecoshard_url,
             'local_path': local_ecoshard_path,
-            'download_task': download_task
+            'download_task': download_task,
+            'created_files_list': created_files_list,
         }
         LOGGER.debug('just added: %s', self.key_to_path_task_map[key])
 
@@ -149,6 +155,24 @@ class TaskGraphDownloader(object):
         if not os.path.exists(local_path):
             raise RuntimeError('%s does not exist on disk' % local_path)
         return local_path
+
+    def remove_files(self, key):
+        """Removes the files created in the by the call to `download_ecoshard`.
+
+        Parameters:
+            key (str): key used to reference ecoshard when `download_ecoshard`
+                was invoked. If `key` was not used in this way or a call to
+                `remove_files` was already made an exception will be raised.
+
+        Returns:
+            None.
+
+        """
+        if key not in self.key_to_path_task_map:
+            raise ValueError('%s not a valid key' % key)
+        for path in self.key_to_path_task_map[key]['created_files_list']:
+            os.remove(path)
+        del self.key_to_path_task_map[key]
 
     def join(self):
         """Joins all downloading tasks, blocks until complete."""
@@ -179,9 +203,6 @@ def download_and_unzip(url, target_dir, target_token_path):
         with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
             zip_ref.extractall(target_dir)
 
-        LOGGER.debug('cleaning up %s', zipfile_path)
-        os.remove(zipfile_path)
-
         LOGGER.debug('writing token %s', target_token_path)
         with open(target_token_path, 'w') as touchfile:
             touchfile.write(f'unzipped {zipfile_path}')
@@ -191,7 +212,7 @@ def download_and_unzip(url, target_dir, target_token_path):
         raise
 
 
-def download_and_ungzip(url, target_path):
+def download_and_ungzip(url, target_gzipfile_path):
     """Download the gzip file `url` to `target_path`.
 
     Downloads a gzipped file and uncompresses it to `target_path`. The original
@@ -199,23 +220,18 @@ def download_and_ungzip(url, target_path):
 
     Parameters:
         url (str): url to a gzipped file.
-        target_path (str): local location of uncompressed gzipped file.
+        target_gzipfile_path (str): path to target download gziped file.
 
     Returns:
         None.
 
     """
-    gzipfile_path = os.path.join(
-        os.path.dirname(target_path), os.path.basename(url))
-    ecoshard.download_url(url, gzipfile_path)
-
-    with gzip.open(gzipfile_path, 'rb') as gzip_file:
-        with open(os.path.splitext(gzipfile_path)[0], 'wb') as target_file:
+    ecoshard.download_url(url, target_gzipfile_path)
+    with gzip.open(target_gzipfile_path, 'rb') as gzip_file:
+        with open(os.path.splitext(target_gzipfile_path)[0], 'wb') as target_file:
             while True:
                 content = gzip_file.read(GZIP_BUFFER_SIZE)
                 if content:
                     target_file.write(content)
                 else:
                     break
-
-    os.remove(gzipfile_path)
