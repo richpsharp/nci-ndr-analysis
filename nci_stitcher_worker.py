@@ -5,14 +5,10 @@ This script will create 1 degree stitches of NDR results.
 import argparse
 import datetime
 import glob
-import json
 import logging
-import multiprocessing
 import os
 import queue
-import re
 import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -20,9 +16,7 @@ import traceback
 import zipfile
 
 from osgeo import gdal
-from osgeo import ogr
 from osgeo import osr
-import ecoshard
 import flask
 import numpy
 import pygeoprocessing
@@ -42,6 +36,7 @@ WORKSPACE_DIR = 'workspace_worker'
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
 WARP_DIR = os.path.join(WORKSPACE_DIR, 'warped_rasters')
+GLOBAL_NODATA_VAL = -1
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -186,6 +181,7 @@ def stitcher_worker(watershed_r_tree):
             stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
             stitch_raster.SetGeoTransform(geotransform)
             stitch_band = stitch_raster.GetRasterBand(1)
+            stitch_band.SetNoDataValue(GLOBAL_NODATA_VAL)
             stitch_band.FlushCache()
             stitch_raster.FlushCache()
             global_raster_info_map[raster_base_id] = {
@@ -257,16 +253,17 @@ def stitcher_worker(watershed_r_tree):
                     int(round(x)) for x in gdal.ApplyGeoTransform(
                         global_inv_gt, warp_bb[2], warp_bb[3])]
 
-                if (global_i_min >= global_raster.RasterXSize or
-                        global_j_min >= global_raster.RasterYSize or
+                global_xsize, global_ysize = global_raster_info['raster_size']
+
+                if (global_i_min >= global_xsize or
+                        global_j_min >= global_ysize or
                         global_i_max < 0 or global_j_max < 0):
                     LOGGER.debug(stitch_raster_info)
                     raise ValueError(
                         '%f %f %f %f out of bounds (%d, %d)',
                         global_i_min, global_j_min,
                         global_i_max, global_j_max,
-                        global_raster.RasterXSize,
-                        global_raster.RasterYSize)
+                        global_xsize, global_ysize)
 
                 # clamp to fit in the global i/j rasters
                 stitch_i = 0
@@ -277,8 +274,8 @@ def stitcher_worker(watershed_r_tree):
                 if global_j_min < 0:
                     stitch_j = -global_j_min
                     global_j_min = 0
-                global_i_max = min(global_raster.RasterXSize, global_i_max)
-                global_j_max = min(global_raster.RasterYSize, global_j_max)
+                global_i_max = min(global_xsize, global_i_max)
+                global_j_max = min(global_ysize, global_j_max)
                 stitch_x_size = global_i_max - global_i_min
                 stitch_y_size = global_j_max - global_j_min
 
@@ -295,10 +292,9 @@ def stitcher_worker(watershed_r_tree):
                     global_j_max-global_j_min)
 
                 stitch_nodata = stitch_raster_info['nodata'][0]
-                global_nodata = global_raster_info['nodata'][0]
-
                 stitch_array = stitch_raster.ReadAsArray(
                     stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+                LOGGER.debug('%s\n%s', )
                 valid_stitch = (
                     ~numpy.isclose(stitch_array, stitch_nodata))
                 if global_array.size != stitch_array.size:
@@ -339,6 +335,7 @@ def stitcher_worker(watershed_r_tree):
             LOGGER.exception('something bad happened')
             JOB_STATUS[payload['session_id']] = 'ERROR: %s' % str(e)
             raise
+
 
 @retrying.retry(
     stop_max_attempt_number=5, wait_exponential_multiplier=1000,
