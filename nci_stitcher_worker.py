@@ -57,6 +57,12 @@ APP = flask.Flask(__name__)
 PATH_MAP = {}
 TARGET_PIXEL_SIZE = (90, -90)
 
+RASTER_PATH_BASE_LIST = [
+    'n_export.tif', 'intermediate_outputs/modified_load_n.tif']
+
+AWS_BASE_URL = (
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/watershed_workspaces/')
+
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
     'watersheds_globe_HydroSHEDS_15arcseconds_'
@@ -162,37 +168,162 @@ def stitcher_worker(watershed_r_tree):
             wgs84_srs = osr.SpatialReference()
             wgs84_srs.ImportFromEPSG(4326)
 
-            stitch_raster_path = os.path.join(
-                WORKSPACE_DIR, '%f_%f_%f_%f.tif' % (
-                    lng_min, lat_min, lng_max, lat_max))
-            gtiff_driver = gdal.GetDriverByName('GTiff')
-            stitch_raster = gtiff_driver.Create(
-                stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
-                options=[
-                    'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=LZW',
-                    'SPARSE_OK=TRUE'])
-            stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
-            stitch_raster.SetGeoTransform(geotransform)
-            stitch_band = stitch_raster.GetRasterBand(1)
+            global_raster_info_map = {}
+            for raster_subpath in RASTER_PATH_BASE_LIST:
+                raster_base_id = os.path.basename(
+                    os.path.splitext(raster_subpath)[0])
+
+                stitch_raster_path = os.path.join(
+                    WORKSPACE_DIR, '%f_%f_%f_%f_%s.tif' % (
+                        lng_min, lat_min, lng_max, lat_max, raster_base_id))
+                gtiff_driver = gdal.GetDriverByName('GTiff')
+                stitch_raster = gtiff_driver.Create(
+                    stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
+                    options=[
+                        'TILED=YES', 'BIGTIFF=YES', 'COMPRESS=LZW',
+                        'SPARSE_OK=TRUE'])
+                stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
+                stitch_raster.SetGeoTransform(geotransform)
+                stitch_band = stitch_raster.GetRasterBand(1)
+                stitch_band.FlushCache()
+                global_raster_info_map[raster_base_id] = {
+                    'raster': stitch_raster,
+                    'band': stitch_band,
+                    'info': pygeoprocessing.get_raster_info(stitch_raster_path)
+                }
 
             # find all the watersheds that overlap this grid cell
             bounding_box = shapely.geometry.box(
                 lng_min, lat_min, lng_max, lat_max)
             for obj in watershed_r_tree.intersection(
                     bounding_box.bounds, objects=True):
-                if obj['path'] not in path_to_watershed_vector_map:
-                    path_to_watershed_vector_map[obj['path']] = (
-                        gdal.OpenEx(obj['path'], gdal.OF_VECTOR))
-                layer = path_to_watershed_vector_map[obj['path']].GetLayer()
-                feature = layer.GetFeature(obj['fid'])
-                geom = feature.GetGeometryRef()
+                vector_path = obj['vector_path']
+                if vector_path not in path_to_watershed_vector_map:
+                    path_to_watershed_vector_map[vector_path] = (
+                        gdal.OpenEx(vector_path, gdal.OF_VECTOR))
+                watershed_basename = (
+                    os.path.basename(os.path.splitext(vector_path)[0]))
+                layer = path_to_watershed_vector_map[vector_path].GetLayer()
+                watershed_feature = layer.GetFeature(obj['fid'])
+                geom = watershed_feature.GetGeometryRef()
                 geom_shapely = shapely.wkb.loads(geom.ExportToWkb())
                 if geom_shapely.intersects(bounding_box):
                     LOGGER.debug("intersection!")
                 else:
                     LOGGER.debug('no intersection')
-
+                    continue
                 LOGGER.debug(obj)
+
+                LOGGER.debug('download the watershed workspace .zip')
+
+                basin_id = watershed_feature.GetField('BASIN_ID')
+                watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
+                # test if resource exists
+                watershed_url = os.path.join(
+                    AWS_BASE_URL, '%s.zip' % watershed_id)
+
+                download_watershed(watershed_url, tdd_downloader)
+
+                for raster_subpath in RASTER_PATH_BASE_LIST:
+                    global_raster, global_raster_info, _ = (
+                        global_raster_info_map[raster_subpath])
+                    global_band = global_raster.GetRasterBand(1)
+                    global_inv_gt = gdal.InvGeoTransform(
+                        global_raster_info['geotransform'])
+                    stitch_raster_path = os.path.join(
+                        tdd_downloader.get_path(watershed_id), raster_subpath)
+                    stitch_raster_info = pygeoprocessing.get_raster_info(
+                        stitch_raster_path)
+                    warp_raster_path = os.path.join(
+                        WARP_DIR, '%s_%s' % (
+                            watershed_id, os.path.basename(stitch_raster_path)))
+                    warp_task = task_graph.add_task(
+                        func=pygeoprocessing.warp_raster,
+                        args=(
+                            stitch_raster_path, global_raster_info['pixel_size'],
+                            warp_raster_path, 'near'),
+                        kwargs={'target_sr_wkt': global_raster_info['projection']},
+                        target_path_list=[warp_raster_path],
+                        task_name='warp %s' % stitch_raster_path)
+                    warp_task.join()
+                    warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
+                    warp_bb = warp_info['bounding_box']
+
+                    # recall that y goes down as j goes up, so min y is max j
+                    global_i_min, global_j_max = [
+                        int(round(x)) for x in gdal.ApplyGeoTransform(
+                            global_inv_gt, warp_bb[0], warp_bb[1])]
+                    global_i_max, global_j_min = [
+                        int(round(x)) for x in gdal.ApplyGeoTransform(
+                            global_inv_gt, warp_bb[2], warp_bb[3])]
+
+                    if (global_i_min >= global_raster.RasterXSize or
+                            global_j_min >= global_raster.RasterYSize or
+                            global_i_max < 0 or global_j_max < 0):
+                        LOGGER.debug(stitch_raster_info)
+                        raise ValueError(
+                            '%f %f %f %f out of bounds (%d, %d)',
+                            global_i_min, global_j_min,
+                            global_i_max, global_j_max,
+                            global_raster.RasterXSize,
+                            global_raster.RasterYSize)
+
+                    # clamp to fit in the global i/j rasters
+                    stitch_i = 0
+                    stitch_j = 0
+                    if global_i_min < 0:
+                        stitch_i = -global_i_min
+                        global_i_min = 0
+                    if global_j_min < 0:
+                        stitch_j = -global_j_min
+                        global_j_min = 0
+                    global_i_max = min(global_raster.RasterXSize, global_i_max)
+                    global_j_max = min(global_raster.RasterYSize, global_j_max)
+                    stitch_x_size = global_i_max - global_i_min
+                    stitch_y_size = global_j_max - global_j_min
+
+                    stitch_raster = gdal.OpenEx(warp_raster_path, gdal.OF_RASTER)
+
+                    if stitch_i + stitch_x_size > stitch_raster.RasterXSize:
+                        stitch_x_size = stitch_raster.RasterXSize - stitch_i
+                    if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
+                        stitch_y_size = stitch_raster.RasterYSize - stitch_j
+
+                    global_array = global_band.ReadAsArray(
+                        global_i_min, global_j_min,
+                        global_i_max-global_i_min,
+                        global_j_max-global_j_min)
+
+                    stitch_nodata = stitch_raster_info['nodata'][0]
+                    global_nodata = global_raster_info['nodata'][0]
+
+                    stitch_array = stitch_raster.ReadAsArray(
+                        stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+                    valid_stitch = (
+                        ~numpy.isclose(stitch_array, stitch_nodata))
+                    if global_array.size != stitch_array.size:
+                        raise ValueError(
+                            "global not equal to stitch:\n"
+                            "%d %d %d %d\n%d %d %d %d",
+                            global_i_min, global_j_min,
+                            global_i_max-global_i_min,
+                            global_j_max-global_j_min,
+                            stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+
+                    global_array[valid_stitch] = stitch_array[valid_stitch]
+                    global_band.WriteArray(
+                        global_array, xoff=global_i_min, yoff=global_j_min)
+                    global_band = None
+
+                try:
+                    shutil.rmtree(tdd_downloader.get_path(watershed_id))
+                except OSError:
+                    LOGGER.warn(
+                        "couldn't remove %s" % tdd_downloader.get_path(
+                            watershed_id))
+
+
+                LOGGER.debug('for each sub-raster, stitch it: warp it, ')
 
             LOGGER.warning('TODO: no work being done yet but it would go here')
             LOGGER.debug(
@@ -208,6 +339,34 @@ def stitcher_worker(watershed_r_tree):
         except Exception as e:
             LOGGER.exception('something bad happened')
             JOB_STATUS[payload['session_id']] = 'ERROR: %s' % str(e)
+            raise
+
+@retrying.retry(
+    stop_max_attempt_number=5, wait_exponential_multiplier=1000,
+    wait_exponential_max=10000)
+def download_watershed(watershed_url, watershed_id):
+    """Download the watershed workspace/zip file if possible.
+
+    Parameters:
+        watershed_url (str): url to .zip watershed workspace.
+        watershed_id (str): id of watershed feature.
+
+    Returns:
+        None.
+
+    """
+    with requests.get(watershed_url, stream=True) as response:
+        try:
+            response.raise_for_status()
+            tdd_downloader.download_ecoshard(
+                os.path.join(
+                    AWS_BASE_URL, '%s.zip' % watershed_id),
+                watershed_id, decompress='unzip',
+                local_path='workspace_worker/%s' % watershed_id)
+            task_graph.join()
+        except requests.exceptions.HTTPError:
+            # probably not a workspace we processed
+            LOGGER.exception('exception in download_watershed')
             raise
 
 
@@ -303,7 +462,7 @@ def stitch_into(master_raster_path, base_raster_path, nodata_value):
 
 
 def build_watershed_index(
-        watershed_path_list, index_base_file_path, index_target_file):
+        watershed_path_list, index_base_file_path):
     """Build an RTree index of watershed geometry.
 
     Parameters:
@@ -311,7 +470,9 @@ def build_watershed_index(
         index_base_file_path (str): basename to use to stream index to a file.
 
     Returns:
-        rtree.Index object containing sorted watershed objects.
+        watershed rtree whose objects contain:
+            'watershed_path': path to watershed shapefile
+            'fid': watershed feature id.
 
     """
     watershed_list = []
@@ -336,11 +497,11 @@ def build_watershed_index(
             watershed_list.append((obj_id, watershed_shapely.bounds, obj))
             obj_id += 1
             watershed_shapely = None
+        break
     LOGGER.info('build the index')
-    rtree.index.Index(index_base_file_path, watershed_list)
-    with open(index_target_file, 'w') as index_file:
-        index_file.write(datetime.datetime.now())
+    watershed_rtree = rtree.index.Index(watershed_list)
     LOGGER.info('index all done')
+    return watershed_rtree
 
 
 if __name__ == '__main__':
@@ -373,23 +534,13 @@ if __name__ == '__main__':
         tdd_downloader.get_path('watersheds'), '*.shp')))
     LOGGER.debug('watershed path list: %s', watershed_path_list)
     index_token_path = os.path.join(CHURN_DIR, 'index.COMPLETE')
-    build_watershed_index_task = task_graph.add_task(
-        func=build_watershed_index,
-        args=(
-            watershed_path_list, watershed_index_basename_path,
-            index_token_path),
-        ignore_path_list=[
-            watershed_index_basename_path + x for x in ['.dat', '.idx']],
-        target_path_list=[index_token_path],
-        task_name='make index')
 
-    build_watershed_index_task.join()
-    LOGGER.debug('load watershed index')
-    watershed_index = rtree.index.Index('watershed_index')
+    watershed_r_tree = build_watershed_index(
+        watershed_path_list, watershed_index_basename_path)
 
     args = parser.parse_args()
     stitcher_worker_thread = threading.Thread(
-        target=stitcher_worker, args=(watershed_index,))
+        target=stitcher_worker, args=(watershed_r_tree,))
     LOGGER.debug('starting stitcher worker')
     stitcher_worker_thread.start()
 
