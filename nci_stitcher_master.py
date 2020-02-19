@@ -24,6 +24,8 @@ import uuid
 from osgeo import gdal
 from osgeo import osr
 import flask
+import numpy
+import pygeoprocessing
 import requests
 import retrying
 import taskgraph
@@ -388,6 +390,35 @@ def global_stitcher(result_queue):
             scenario_id = payload['scenario_id']
             global_stitch_raster_path = \
                 GLOBAL_STITCH_PATH_MAP[(raster_id, scenario_id)]
+
+            # get ul of tile and figure out where it goes in global
+            local_tile_info = pygeoprocessing.get_raster_info(
+                local_tile_raster_path)
+            global_stitch_info = pygeoprocessing.get_raster_info(
+                global_stitch_raster_path)
+            global_inv_gt = gdal.InvGeoTransform(
+                global_stitch_info['geotransform'])
+            local_gt = local_tile_info['geotransform']
+            global_i, global_j = gdal.ApplyGeoTransform(
+                global_inv_gt, local_gt[0], local_gt[3])
+
+            local_tile_raster = gdal.OpenEx(
+                local_tile_raster_path, gdal.OF_RASTER)
+            local_array = local_tile_raster.ReadAsArray()
+            local_tile_raster = None
+            global_raster = gdal.OpenEx(
+                global_stitch_raster_path, gdal.OF_RASTER | gdal.GA_Update)
+            global_band = global_raster.GetRasterBand(1)
+            global_array = global_band.ReadAsArray(
+                xoff=global_i, yoff=global_j,
+                win_xsize=local_array.shape[1], win_ysize=local_array.shape[0])
+            valid_mask = ~numpy.isclose(
+                local_array, local_tile_info['nodata'][0])
+            global_array[valid_mask] = local_array[valid_mask]
+            global_band.WriteArray(global_array, xoff=global_i, yoff=global_j)
+            global_band.FlushCache()
+            global_band = None
+            global_raster = None
 
         except Exception:
             LOGGER.exception('error on global stitcher')
