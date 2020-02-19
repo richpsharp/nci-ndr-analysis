@@ -9,7 +9,7 @@ import logging
 import os
 import pathlib
 import queue
-import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -308,6 +308,15 @@ def stitcher_worker(watershed_r_tree):
                         "couldn't remove %s" % tdd_downloader.get_path(
                             watershed_id))
 
+            # TODO: upload the .tif
+            geotiff_s3_uri = (
+                "%s/%s/%s" %
+                (payload['bucket_uri_prefix'], scenario_id,
+                 os.path.basename(stitch_raster_path)))
+            subprocess.run(
+                ["/usr/local/bin/aws2 s3 cp %s %s" % (
+                    stitch_raster_path, geotiff_s3_uri)], shell=True,
+                check=True)
             total_time = time.time() - start_time
             data_payload = {
                 'total_time': total_time,

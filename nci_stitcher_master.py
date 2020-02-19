@@ -66,7 +66,7 @@ WGS84_WKT = WGS84_SR.ExportToWkt()
 WORKER_TAG_ID = 'compute-server'
 # this form must be of 's3://[bucket id]/[subdir]' any change should be updated
 # in the worker when it uploads the zip file
-BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_scenarios'
+BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_stitches/tiles'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
 
 APP = flask.Flask(__name__)
