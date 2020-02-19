@@ -458,7 +458,7 @@ def send_job(job_payload):
 
 def make_empty_wgs84_raster(
         cell_size, nodata_value, target_datatype, target_raster_path,
-        target_token_complete_path):
+        token_data, target_token_complete_path):
     """Make a big empty raster in WGS84 projection.
 
     Parameters:
@@ -469,6 +469,8 @@ def make_empty_wgs84_raster(
         target_raster_path (str): this is the target raster that will cover
             [-180, 180), [90, -90) with cell size units with y direction being
             negative.
+        token_data (str): data to write to the token to make a unique function
+            signature.
         target_token_complete_path (str): this file is created if the
             mosaic to target is successful. Useful for taskgraph task
             scheduling.
@@ -505,7 +507,7 @@ def make_empty_wgs84_raster(
     target_raster = gdal.OpenEx(target_raster_path, gdal.OF_RASTER)
     if target_raster:
         with open(target_token_complete_path, 'w') as target_token_file:
-            target_token_file.write(str(datetime.datetime.now()))
+            target_token_file.write(token_data+str(datetime.datetime.now()))
 
 
 if __name__ == '__main__':
@@ -554,6 +556,8 @@ if __name__ == '__main__':
                     (GLOBAL_STITCH_WGS84_CELL_SIZE,
                      -GLOBAL_STITCH_WGS84_CELL_SIZE), GLOBAL_STITCH_NODATA,
                     gdal.GDT_Float32, global_stitch_raster_path,
+                    os.path.splitext(os.path.basename(
+                        target_token_complete_path))[0],
                     target_token_complete_path),
                 target_path_list=[
                     global_stitch_raster_path, target_token_complete_path],
