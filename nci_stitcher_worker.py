@@ -222,7 +222,6 @@ def stitcher_worker(watershed_r_tree):
 
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
 
-                global_band = global_raster_info_map[raster_id]['band']
                 global_raster_info = \
                     global_raster_info_map[raster_id]['info']
 
@@ -292,15 +291,15 @@ def stitcher_worker(watershed_r_tree):
                 if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
                     stitch_y_size = stitch_raster.RasterYSize - stitch_j
 
-                global_array = global_band.ReadAsArray(
-                    global_i_min, global_j_min,
-                    global_i_max-global_i_min,
-                    global_j_max-global_j_min)
+                global_array = (
+                    global_raster_info_map[raster_id]['band'].ReadAsArray(
+                        global_i_min, global_j_min,
+                        global_i_max-global_i_min,
+                        global_j_max-global_j_min))
 
                 stitch_nodata = stitch_raster_info['nodata'][0]
                 stitch_array = stitch_raster.ReadAsArray(
                     stitch_i, stitch_j, stitch_x_size, stitch_y_size)
-                LOGGER.debug('%s\n%s', )
                 valid_stitch = (
                     ~numpy.isclose(stitch_array, stitch_nodata))
                 if global_array.size != stitch_array.size:
@@ -312,10 +311,14 @@ def stitcher_worker(watershed_r_tree):
                         global_j_max-global_j_min,
                         stitch_i, stitch_j, stitch_x_size, stitch_y_size)
 
+                LOGGER.debug(
+                    'writing to %s %s %s\n%s\n%s', global_i_min, global_j_min,
+                    stitch_array.shape, stitch_array, global_array)
                 global_array[valid_stitch] = stitch_array[valid_stitch]
-                global_band.WriteArray(
+                global_raster_info_map[raster_id]['band'].WriteArray(
                     global_array, xoff=global_i_min, yoff=global_j_min)
-                global_band = None
+                global_raster_info_map[raster_id]['band'].FlushCache()
+                global_raster_info_map[raster_id]['raster'].FlushCache()
 
                 try:
                     tdd_downloader.remove_files(watershed_id)

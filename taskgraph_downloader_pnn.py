@@ -118,9 +118,10 @@ class TaskGraphDownloader(object):
                 target_path_list=[unzip_token_path],
                 task_name='download %s' % os.path.basename(ecoshard_url))
             download_task.join()
-            created_files_list.append(
+            created_files_list.extend(
                 zipfile.ZipFile(os.path.join(
-                    self.download_dir, os.path.basename(ecoshard_url)), 'r'))
+                    self.download_dir, os.path.basename(
+                        ecoshard_url)), 'r').namelist())
             created_files_list.append(unzip_token_path)
             if local_path:
                 local_ecoshard_path = os.path.join(
