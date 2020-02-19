@@ -479,6 +479,7 @@ def make_empty_wgs84_raster(
         None.
 
     """
+    LOGGER.info('creating empty raster for %s', target_raster_path)
     gtiff_driver = gdal.GetDriverByName('GTiff')
     try:
         os.makedirs(os.path.dirname(target_raster_path))
