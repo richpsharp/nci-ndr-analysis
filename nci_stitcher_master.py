@@ -40,6 +40,7 @@ WORKSPACE_DIR = 'nci_stitcher_workspace'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
+TILE_DIR = os.path.join(CHURN_DIR, 'tiles')
 DATABASE_TOKEN_PATH = os.path.join(
     CHURN_DIR, '%s.CREATED' % os.path.basename(STATUS_DATABASE_PATH))
 GRID_STEP_SIZE = 2
@@ -373,6 +374,13 @@ def global_stitcher(result_queue):
         try:
             payload = result_queue.get()
             LOGGER.debug('stitching this payload: %s' % payload)
+            geotiff_s3_uri = payload['geotiff_s3_uri']
+            local_tile_raster_path = os.path.join(
+                TILE_DIR, os.path.basename(local_tile_raster_path))
+            subprocess.run(
+                ["/usr/local/bin/aws2 s3 cp %s %s" % (
+                    geotiff_s3_uri, local_tile_raster_path)], shell=True,
+                check=True)
         except Exception:
             LOGGER.exception('error on global stitcher')
             raise
@@ -455,7 +463,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     for dir_path in [
-            WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
+            WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, TILE_DIR]:
         try:
             os.makedirs(dir_path)
         except OSError:
