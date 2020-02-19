@@ -558,8 +558,8 @@ if __name__ == '__main__':
                 target_path_list=[
                     global_stitch_raster_path, target_token_complete_path],
                 ignore_path_list=[global_stitch_raster_path],
-                task_name='create empty global raster for %s' % os.path.basename(
-                    global_stitch_raster_path))
+                task_name='create empty global raster for %s' % (
+                    os.path.basename(global_stitch_raster_path)))
 
     LOGGER.debug('start threading')
     new_host_monitor_thread = threading.Thread(
