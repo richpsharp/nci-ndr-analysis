@@ -360,12 +360,19 @@ def processing_complete():
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
-def global_stitcher():
-    """Worker to stitch global raster."""
+def global_stitcher(result_queue):
+    """Worker to stitch global raster.
+
+    Parameters:
+        result_queue (multiprocessing.Queue): this queue will dump payloads
+            that are ready to stitch.
+
+    """
+    LOGGER.debug('starting global stitcher')
     while True:
         try:
-            payload = RESULT_QUEUE.get()
-            LOGGER.debug('stitching this payload: %s', payload)
+            payload = result_queue.get()
+            LOGGER.debug('stitching this payload: %s' % payload)
         except Exception:
             LOGGER.exception('error on global stitcher')
             raise
@@ -472,7 +479,8 @@ if __name__ == '__main__':
     scheduling_thread.start()
 
     stitcher_process = multiprocessing.Process(
-        target=global_stitcher)
+        target=global_stitcher,
+        args=(RESULT_QUEUE,))
     stitcher_process.start()
 
     START_TIME = time.time()

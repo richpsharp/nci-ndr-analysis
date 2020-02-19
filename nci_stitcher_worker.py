@@ -283,6 +283,7 @@ def stitcher_worker(watershed_r_tree):
                 stitch_nodata = stitch_raster_info['nodata'][0]
                 stitch_array = stitch_raster.ReadAsArray(
                     stitch_i, stitch_j, stitch_x_size, stitch_y_size)
+                stitch_raster = None
                 valid_stitch = (
                     ~numpy.isclose(stitch_array, stitch_nodata))
                 if global_array.size != stitch_array.size:
