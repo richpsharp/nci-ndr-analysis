@@ -311,9 +311,6 @@ def stitcher_worker(watershed_r_tree):
                         global_j_max-global_j_min,
                         stitch_i, stitch_j, stitch_x_size, stitch_y_size)
 
-                LOGGER.debug(
-                    'writing to %s %s %s\n%s\n%s', global_i_min, global_j_min,
-                    stitch_array.shape, stitch_array, global_array)
                 global_array[valid_stitch] = stitch_array[valid_stitch]
                 global_raster_info_map[raster_id]['band'].WriteArray(
                     global_array, xoff=global_i_min, yoff=global_j_min)
@@ -327,12 +324,7 @@ def stitcher_worker(watershed_r_tree):
                         "couldn't remove %s" % tdd_downloader.get_path(
                             watershed_id))
 
-            LOGGER.debug('for each sub-raster, stitch it: warp it, ')
-
             LOGGER.warning('TODO: no work being done yet but it would go here')
-            LOGGER.debug(
-                'about to callback to this url: %s', payload['callback_url'])
-            LOGGER.debug('with this payload: %s', data_payload)
             response = requests.post(
                 payload['callback_url'], json=data_payload)
             if not response.ok:
