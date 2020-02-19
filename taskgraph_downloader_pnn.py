@@ -51,6 +51,15 @@ class TaskGraphDownloader(object):
     def __del__(self):
         pass
 
+    def exists(self, key):
+        """Check if the key has already been created.
+
+        Returns:
+            True if `key` already used as a download key.
+
+        """
+        return key in self.key_to_path_task_map
+
     def download_ecoshard(
             self, ecoshard_url, key, decompress='none', local_path=None):
         """Download the ecoshard given by `ecoshard_url`.

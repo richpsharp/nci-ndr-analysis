@@ -313,28 +313,23 @@ def schedule_worker():
         cursor.execute(
             'SELECT scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
-            'FROM job_status WHERE stiched=0')
+            'FROM job_status WHERE stiched=0 AND '
+            'lng_min=10 AND lat_min=0')
         payload_list = list(cursor.fetchall())
         connection.commit()
         connection.close()
 
         for job_tuple in payload_list:
-            # TODO: this part is manually commented a grid so I can debug
             job_payload = {
                 'scenario_id': job_tuple[0],
                 'raster_id': job_tuple[1],
-                'lng_min': 11,
-                'lat_min': 1,
-                'lng_max': 12,
-                'lat_max': 2,
-                # 'lng_min': job_tuple[2],
-                # 'lat_min': job_tuple[3],
-                # 'lng_max': job_tuple[4],
-                # 'lat_max': job_tuple[5],
+                'lng_min': job_tuple[2],
+                'lat_min': job_tuple[3],
+                'lng_max': job_tuple[4],
+                'lat_max': job_tuple[5],
             }
             LOGGER.debug('scheduling %s', job_payload)
             send_job(job_payload)
-            break
 
     except Exception:
         LOGGER.exception('exception in scheduler')

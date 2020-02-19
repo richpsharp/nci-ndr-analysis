@@ -205,33 +205,21 @@ def stitcher_worker(watershed_r_tree):
                 watershed_feature = layer.GetFeature(item.object['fid'])
                 geom = watershed_feature.GetGeometryRef()
                 geom_shapely = shapely.wkb.loads(geom.ExportToWkb())
-                if geom_shapely.intersects(bounding_box):
-                    LOGGER.debug("intersection!")
-                else:
-                    LOGGER.debug('no intersection')
+                if not geom_shapely.intersects(bounding_box):
                     continue
-                LOGGER.debug(item.object)
-
-                LOGGER.debug('download the watershed workspace .zip')
-
                 basin_id = watershed_feature.GetField('BASIN_ID')
                 watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
                 # test if resource exists
                 watershed_url = os.path.join(
                     AWS_BASE_URL, '%s.zip' % watershed_id)
-
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
-
                 global_raster_info = \
                     global_raster_info_map[raster_id]['info']
-
                 global_inv_gt = gdal.InvGeoTransform(
                     global_raster_info['geotransform'])
-
                 watershed_raster_path = str(next(
                     pathlib.Path(tdd_downloader.get_path(watershed_id)).rglob(
                         '%s.tif' % raster_id)))
-
                 stitch_raster_info = pygeoprocessing.get_raster_info(
                     watershed_raster_path)
                 warp_raster_path = os.path.join(
@@ -355,10 +343,12 @@ def download_watershed(watershed_url, watershed_id, tdd_downloader):
     with requests.get(watershed_url, stream=True) as response:
         try:
             response.raise_for_status()
-            tdd_downloader.download_ecoshard(
-                watershed_url, watershed_id, decompress='unzip',
-                local_path=os.path.join('workspace_worker', watershed_id))
-            task_graph.join()
+            # check to make sure it's not already downloaded
+            if not tdd_downloader.exists(watershed_id):
+                tdd_downloader.download_ecoshard(
+                    watershed_url, watershed_id, decompress='unzip',
+                    local_path=os.path.join('workspace_worker', watershed_id))
+                task_graph.join()
         except requests.exceptions.HTTPError:
             # probably not a workspace we processed
             LOGGER.exception('exception in download_watershed')
