@@ -159,29 +159,24 @@ def stitcher_worker(watershed_r_tree):
             wgs84_srs = osr.SpatialReference()
             wgs84_srs.ImportFromEPSG(4326)
 
-            global_raster_info_map = {}
             raster_id = job_payload['raster_id']
             scenario_id = job_payload['scenario_id']
-            stitch_raster_path = os.path.join(
+            global_raster_path = os.path.join(
                 WORKSPACE_DIR, '%f_%f_%f_%f_%s_%s.tif' % (
                     lng_min, lat_min, lng_max, lat_max, raster_id,
                     scenario_id))
             gtiff_driver = gdal.GetDriverByName('GTiff')
-            stitch_raster = gtiff_driver.Create(
-                stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
-                options=['COMPRESS=ZSTD'])
-            stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
-            stitch_raster.SetGeoTransform(geotransform)
-            stitch_band = stitch_raster.GetRasterBand(1)
-            stitch_band.SetNoDataValue(GLOBAL_NODATA_VAL)
-            stitch_band.FlushCache()
-            stitch_raster.FlushCache()
-            global_raster_info_map[raster_id] = {
-                'raster': stitch_raster,
-                'band': stitch_band,
-                'info': pygeoprocessing.get_raster_info(stitch_raster_path)
-            }
-
+            global_raster = gtiff_driver.Create(
+                global_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
+                options=['COMPRESS=LZW', 'SPARSE_OK=TRUE'])
+            global_raster.SetProjection(wgs84_srs.ExportToWkt())
+            global_raster.SetGeoTransform(geotransform)
+            global_band = global_raster.GetRasterBand(1)
+            global_band.SetNoDataValue(GLOBAL_NODATA_VAL)
+            global_band.FlushCache()
+            global_raster.FlushCache()
+            global_raster_info = pygeoprocessing.get_raster_info(
+                global_raster_path)
             # find all the watersheds that overlap this grid cell
             bounding_box = shapely.geometry.box(
                 lng_min, lat_min, lng_max, lat_max)
@@ -205,8 +200,6 @@ def stitcher_worker(watershed_r_tree):
                 watershed_url = os.path.join(
                     AWS_BASE_URL, '%s.zip' % watershed_id)
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
-                global_raster_info = \
-                    global_raster_info_map[raster_id]['info']
                 global_inv_gt = gdal.InvGeoTransform(
                     global_raster_info['geotransform'])
                 LOGGER.debug('looking for %s.tif', raster_id)
@@ -272,19 +265,17 @@ def stitcher_worker(watershed_r_tree):
                 if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
                     stitch_y_size = stitch_raster.RasterYSize - stitch_j
 
-                global_array = (
-                    global_raster_info_map[raster_id]['band'].ReadAsArray(
-                        global_i_min, global_j_min,
-                        global_i_max-global_i_min,
-                        global_j_max-global_j_min))
+                global_array = global_band.ReadAsArray(
+                    global_i_min, global_j_min,
+                    global_i_max-global_i_min,
+                    global_j_max-global_j_min)
 
                 stitch_nodata = stitch_raster_info['nodata'][0]
                 stitch_array = stitch_raster.ReadAsArray(
                     stitch_i, stitch_j, stitch_x_size, stitch_y_size)
                 stitch_raster.FlushCache()
                 stitch_raster = None
-                valid_stitch = (
-                    ~numpy.isclose(stitch_array, stitch_nodata))
+                valid_stitch = ~numpy.isclose(stitch_array, stitch_nodata)
                 if global_array.size != stitch_array.size:
                     raise ValueError(
                         "global not equal to stitch:\n"
@@ -295,10 +286,10 @@ def stitcher_worker(watershed_r_tree):
                         stitch_i, stitch_j, stitch_x_size, stitch_y_size)
 
                 global_array[valid_stitch] = stitch_array[valid_stitch]
-                global_raster_info_map[raster_id]['band'].WriteArray(
+                global_band.WriteArray(
                     global_array, xoff=global_i_min, yoff=global_j_min)
-                global_raster_info_map[raster_id]['band'].FlushCache()
-                global_raster_info_map[raster_id]['raster'].FlushCache()
+                global_band.FlushCache()
+                global_raster.FlushCache()
 
                 try:
                     tdd_downloader.remove_files(watershed_id)
@@ -307,14 +298,17 @@ def stitcher_worker(watershed_r_tree):
                         "couldn't remove %s" % tdd_downloader.get_path(
                             watershed_id))
 
+            global_band = None
+            global_raster = None
+
             # TODO: upload the .tif
             geotiff_s3_uri = (
                 "%s/%s/%s" %
                 (payload['bucket_uri_prefix'], scenario_id,
-                 os.path.basename(stitch_raster_path)))
+                 os.path.basename(global_raster_path)))
             subprocess.run(
                 ["/usr/local/bin/aws2 s3 cp %s %s" % (
-                    stitch_raster_path, geotiff_s3_uri)], shell=True,
+                    global_raster_path, geotiff_s3_uri)], shell=True,
                 check=True)
             total_time = time.time() - start_time
             data_payload = {
