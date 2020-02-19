@@ -69,6 +69,7 @@ WORKER_TAG_ID = 'compute-server'
 # in the worker when it uploads the zip file
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_stitches/tiles'
 GLOBAL_STITCH_WGS84_CELL_SIZE = 0.002
+GLOBAL_STITCH_NODATA = -1e38
 
 APP = flask.Flask(__name__)
 
@@ -219,6 +220,7 @@ def processing_status():
     """Download necessary data and initalize empty rasters if needed."""
     return 'hi'
 
+
 GLOBAL_STATUS = {}
 SCENARIO_ID_LIST = [
     'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
@@ -283,7 +285,8 @@ def create_status_database(database_path, complete_token_path):
                     grid_id += 1
     insert_query = (
         'INSERT INTO job_status('
-        'grid_id, scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, stiched) '
+        'grid_id, scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, '
+        'stiched) '
         'VALUES (?, ?, ?, ?, ?, ?, ?, 0)')
     cursor.executemany(insert_query, scenario_output_lat_lng_list)
     with open(complete_token_path, 'w') as complete_token_file:
@@ -381,6 +384,11 @@ def global_stitcher(result_queue):
                 ["/usr/local/bin/aws2 s3 cp %s %s" % (
                     geotiff_s3_uri, local_tile_raster_path)], shell=True,
                 check=True)
+            raster_id = payload['raster_id']
+            scenario_id = payload['scenario_id']
+            global_stitch_raster_path = \
+                GLOBAL_STITCH_PATH_MAP[(raster_id, scenario_id)]
+
         except Exception:
             LOGGER.exception('error on global stitcher')
             raise
@@ -448,6 +456,58 @@ def send_job(job_payload):
         LOGGER.debug('in the finally')
 
 
+def make_empty_wgs84_raster(
+        cell_size, nodata_value, target_datatype, target_raster_path,
+        token_write_data, target_token_complete_path):
+    """Make a big empty raster in WGS84 projection.
+
+    Parameters:
+        cell_size (float): this is the desired cell size in WSG84 degree
+            units.
+        nodata_value (float): desired nodata avlue of target raster
+        target_datatype (gdal enumerated type): desired target datatype.
+        target_raster_path (str): this is the target raster that will cover
+            [-180, 180), [90, -90) with cell size units with y direction being
+            negative.
+        target_token_complete_path (str): this file is created if the
+            mosaic to target is successful. Useful for taskgraph task
+            scheduling.
+
+    Returns:
+        None.
+
+    """
+    gtiff_driver = gdal.GetDriverByName('GTiff')
+    try:
+        os.makedirs(os.path.dirname(target_raster_path))
+    except OSError:
+        pass
+
+    n_cols = int(abs(360.0 / cell_size[0]))
+    n_rows = int(abs(180.0 / cell_size[1]))
+    geotransform = (-180.0, cell_size[0], 0.0, 90.0, 0, cell_size[1])
+
+    target_raster = gtiff_driver.Create(
+        target_raster_path, n_cols, n_rows, 1, target_datatype,
+        options=(
+            'TILED=YES', 'BIGTIFF=YES', 'BLOCKXSIZE=256', 'BLOCKYSIZE=256',
+            'COMPRESS=LZW', 'SPARSE_OK=TRUE'))
+    wgs84_sr = osr.SpatialReference()
+    wgs84_sr.ImportFromEPSG(4326)
+    target_raster.SetProjection(wgs84_sr.ExportToWkt())
+    target_raster.SetGeoTransform(geotransform)
+    target_band = target_raster.GetRasterBand(1)
+    target_band.SetNoDataValue(nodata_value)
+    target_band.Fill(nodata_value)
+    target_band = None
+    target_raster = None
+
+    target_raster = gdal.OpenEx(target_raster_path, gdal.OF_RASTER)
+    if target_raster:
+        with open(target_token_complete_path, 'w') as target_token_file:
+            target_token_file.write(str(datetime.datetime.now()))
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='NCI NDR Stitching.')
@@ -476,6 +536,30 @@ if __name__ == '__main__':
         target_path_list=[DATABASE_TOKEN_PATH],
         ignore_path_list=[STATUS_DATABASE_PATH],
         task_name='create status database')
+
+    GLOBAL_STITCH_PATH_MAP = {}
+    for scenario_id in SCENARIO_ID_LIST:
+        GLOBAL_STATUS[scenario_id] = {}
+        for raster_id in GLOBAL_STITCH_MAP:
+            global_stitch_raster_path = os.path.join(
+                TILE_DIR, '%s_%s_global.tif' % (raster_id, scenario_id))
+            GLOBAL_STITCH_PATH_MAP[(raster_id, scenario_id)] = \
+                global_stitch_raster_path
+            target_token_complete_path = os.path.join(
+                CHURN_DIR, '%s.COMPLETE' % os.path.basename(
+                    global_stitch_raster_path))
+            task_graph.add_task(
+                func=make_empty_wgs84_raster,
+                args=(
+                    (GLOBAL_STITCH_WGS84_CELL_SIZE,
+                     -GLOBAL_STITCH_WGS84_CELL_SIZE), GLOBAL_STITCH_NODATA,
+                    gdal.GDT_Float32, global_stitch_raster_path,
+                    target_token_complete_path),
+                target_path_list=[
+                    global_stitch_raster_path, target_token_complete_path],
+                ignore_path_list=[global_stitch_raster_path],
+                task_name='create empty global raster for %s' % os.path.basename(
+                    global_stitch_raster_path))
 
     LOGGER.debug('start threading')
     new_host_monitor_thread = threading.Thread(
