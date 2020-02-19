@@ -169,7 +169,7 @@ def stitcher_worker(watershed_r_tree):
             gtiff_driver = gdal.GetDriverByName('GTiff')
             stitch_raster = gtiff_driver.Create(
                 stitch_raster_path, n_cols, n_rows, 1, gdal.GDT_Float32,
-                options=['COMPRESS=LZW'])
+                options=['COMPRESS=ZSTD'])
             stitch_raster.SetProjection(wgs84_srs.ExportToWkt())
             stitch_raster.SetGeoTransform(geotransform)
             stitch_band = stitch_raster.GetRasterBand(1)
