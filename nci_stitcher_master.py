@@ -478,7 +478,8 @@ if __name__ == '__main__':
         target=schedule_worker)
     scheduling_thread.start()
 
-    stitcher_process = multiprocessing.Process(
+    LOGGER.debug('making stitching process')
+    stitcher_process = threading.Thread(
         target=global_stitcher,
         args=(RESULT_QUEUE,))
     stitcher_process.start()
