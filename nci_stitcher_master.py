@@ -63,7 +63,7 @@ WGS84_SR = osr.SpatialReference()
 WGS84_SR.ImportFromEPSG(4326)
 WGS84_WKT = WGS84_SR.ExportToWkt()
 
-WORKER_TAG_ID = 'ndr-nci-stitcher-worker'
+WORKER_TAG_ID = 'compute-server'
 # this form must be of 's3://[bucket id]/[subdir]' any change should be updated
 # in the worker when it uploads the zip file
 BUCKET_URI_PREFIX = 's3://nci-ecoshards/ndr_scenarios'
@@ -431,7 +431,8 @@ def send_job(job_payload):
     except Exception as e:
         LOGGER.debug('in the exception: %s', e)
         LOGGER.exception(
-            'something bad happened, on %s for %s', worker_ip_port, job_tuple)
+            'something bad happened, on %s for %s',
+            worker_ip_port, job_payload)
         LOGGER.debug('removing %s from worker set', worker_ip_port)
         GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         raise
