@@ -11,27 +11,21 @@ import datetime
 import json
 import logging
 import os
+import multiprocessing
 import pathlib
 import queue
-import re
 import sqlite3
 import subprocess
 import sys
 import threading
 import time
 import uuid
-import zipfile
 
 from osgeo import gdal
 from osgeo import osr
 import flask
-import ecoshard
-import numpy
-import pygeoprocessing
 import requests
 import retrying
-import shapely.strtree
-import shapely.wkb
 import taskgraph
 
 gdal.SetCacheMax(2**29)
@@ -63,7 +57,7 @@ logging.getLogger('taskgraph').setLevel(logging.INFO)
 DETECTOR_POLL_TIME = 30.0
 SCHEDULED_MAP = {}
 GLOBAL_LOCK = threading.Lock()
-RESULT_QUEUE = queue.Queue()
+RESULT_QUEUE = multiprocessing.Queue()
 RESCHEDULE_QUEUE = queue.Queue()
 WGS84_SR = osr.SpatialReference()
 WGS84_SR.ImportFromEPSG(4326)
@@ -233,7 +227,7 @@ GLOBAL_STITCH_MAP = {
     'n_export': (
         'workspace_worker/[BASENAME]_[FID]/n_export.tif',
         gdal.GDT_Float32, -1),
-    'modified_load': (
+    'modified_load_n': (
         'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/'
         'modified_load_n.tif',
         gdal.GDT_Float32, -1),
@@ -256,6 +250,7 @@ def create_status_database(database_path, complete_token_path):
     create_database_sql = (
         """
         CREATE TABLE job_status (
+            grid_id INTEGER NOT NULL,
             scenario_id TEXT NOT NULL,
             raster_id TEXT NOT NULL,
             lng_min FLOAT NOT NULL,
@@ -273,6 +268,7 @@ def create_status_database(database_path, complete_token_path):
     with open(complete_token_path, 'w') as token_file:
         token_file.write(str(datetime.datetime.now()))
     scenario_output_lat_lng_list = []
+    grid_id = 0
     for scenario_id in SCENARIO_ID_LIST:
         GLOBAL_STATUS[scenario_id] = {}
         for raster_id in GLOBAL_STITCH_MAP:
@@ -281,12 +277,13 @@ def create_status_database(database_path, complete_token_path):
                 for lng_min in range(-180, 180, GRID_STEP_SIZE):
                     lng_max = lng_min + GRID_STEP_SIZE
                     scenario_output_lat_lng_list.append(
-                        (scenario_id, raster_id, lng_min, lat_min,
+                        (grid_id, scenario_id, raster_id, lng_min, lat_min,
                          lng_max, lat_max))
+                    grid_id += 1
     insert_query = (
         'INSERT INTO job_status('
-        'scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, stiched) '
-        'VALUES (?, ?, ?, ?, ?, ?, 0)')
+        'grid_id, scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, stiched) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, 0)')
     cursor.executemany(insert_query, scenario_output_lat_lng_list)
     with open(complete_token_path, 'w') as complete_token_file:
         complete_token_file.write(str(datetime.datetime.now()))
@@ -311,7 +308,7 @@ def schedule_worker():
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
         cursor.execute(
-            'SELECT scenario_id, raster_id, '
+            'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
             'FROM job_status WHERE stiched=0 AND '
             'lng_min=10 AND lat_min=0')
@@ -321,12 +318,13 @@ def schedule_worker():
 
         for job_tuple in payload_list:
             job_payload = {
-                'scenario_id': job_tuple[0],
-                'raster_id': job_tuple[1],
-                'lng_min': job_tuple[2],
-                'lat_min': job_tuple[3],
-                'lng_max': job_tuple[4],
-                'lat_max': job_tuple[5],
+                'grid_id': job_tuple[0],
+                'scenario_id': job_tuple[1],
+                'raster_id': job_tuple[2],
+                'lng_min': job_tuple[3],
+                'lat_min': job_tuple[4],
+                'lng_max': job_tuple[5],
+                'lat_max': job_tuple[6],
             }
             LOGGER.debug('scheduling %s', job_payload)
             send_job(job_payload)
@@ -359,6 +357,18 @@ def processing_complete():
         LOGGER.exception(
             'error on processing completed for host %s. session_ids: %s',
             flask.request.remote_addr, str(SCHEDULED_MAP))
+
+
+@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
+def global_stitcher():
+    """Worker to stitch global raster."""
+    while True:
+        try:
+            payload = RESULT_QUEUE.get()
+            LOGGER.debug('stitching this payload: %s', payload)
+        except Exception:
+            LOGGER.exception('error on global stitcher')
+            raise
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
@@ -460,6 +470,10 @@ if __name__ == '__main__':
     scheduling_thread = threading.Thread(
         target=schedule_worker)
     scheduling_thread.start()
+
+    stitcher_process = multiprocessing.Process(
+        target=global_stitcher)
+    stitcher_process.start()
 
     START_TIME = time.time()
     LOGGER.debug('start the APP')

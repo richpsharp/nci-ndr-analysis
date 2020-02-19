@@ -143,12 +143,6 @@ def stitcher_worker(watershed_r_tree):
             JOB_STATUS[payload['session_id']] = 'RUNNING'
 
             start_time = time.time()
-            total_time = time.time() - start_time
-
-            data_payload = {
-                'total_time': total_time,
-                'session_id': payload['session_id'],
-            }
 
             job_payload = payload['job_payload']
 
@@ -217,6 +211,7 @@ def stitcher_worker(watershed_r_tree):
                     global_raster_info_map[raster_id]['info']
                 global_inv_gt = gdal.InvGeoTransform(
                     global_raster_info['geotransform'])
+                LOGGER.debug('looking for %s.tif', raster_id)
                 watershed_raster_path = str(next(
                     pathlib.Path(tdd_downloader.get_path(watershed_id)).rglob(
                         '%s.tif' % raster_id)))
@@ -312,7 +307,12 @@ def stitcher_worker(watershed_r_tree):
                         "couldn't remove %s" % tdd_downloader.get_path(
                             watershed_id))
 
-            LOGGER.warning('TODO: no work being done yet but it would go here')
+            total_time = time.time() - start_time
+            data_payload = {
+                'total_time': total_time,
+                'session_id': payload['session_id'],
+                'grid_id': payload['grid_id']
+            }
             response = requests.post(
                 payload['callback_url'], json=data_payload)
             if not response.ok:
