@@ -458,7 +458,7 @@ def send_job(job_payload):
 
 def make_empty_wgs84_raster(
         cell_size, nodata_value, target_datatype, target_raster_path,
-        token_write_data, target_token_complete_path):
+        target_token_complete_path):
     """Make a big empty raster in WGS84 projection.
 
     Parameters:
