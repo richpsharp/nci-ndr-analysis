@@ -376,7 +376,7 @@ def global_stitcher(result_queue):
             LOGGER.debug('stitching this payload: %s' % payload)
             geotiff_s3_uri = payload['geotiff_s3_uri']
             local_tile_raster_path = os.path.join(
-                TILE_DIR, os.path.basename(local_tile_raster_path))
+                TILE_DIR, os.path.basename(geotiff_s3_uri))
             subprocess.run(
                 ["/usr/local/bin/aws2 s3 cp %s %s" % (
                     geotiff_s3_uri, local_tile_raster_path)], shell=True,
