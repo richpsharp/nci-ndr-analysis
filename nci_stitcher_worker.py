@@ -311,7 +311,7 @@ def stitcher_worker(watershed_r_tree):
             data_payload = {
                 'total_time': total_time,
                 'session_id': payload['session_id'],
-                'grid_id': payload['grid_id']
+                'grid_id': job_payload['grid_id']
             }
             response = requests.post(
                 payload['callback_url'], json=data_payload)
