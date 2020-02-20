@@ -220,7 +220,44 @@ def new_host_monitor(worker_list=None):
 @APP.route('/api/v1/processing_status', methods=['GET'])
 def processing_status():
     """Download necessary data and initalize empty rasters if needed."""
-    return 'hi'
+    try:
+        ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
+        connection = sqlite3.connect(ro_uri, uri=True)
+        cursor = connection.cursor()
+        LOGGER.debug('querying prescheduled')
+        cursor.execute('SELECT count(1) from job_status')
+        total_count = int(cursor.fetchone()[0])
+        cursor.execute(
+            'SELECT count(1) FROM job_status '
+            'WHERE (stiched=1)')
+        stitched_count = int(cursor.fetchone()[0])
+        connection.commit()
+        connection.close()
+        active_count, ready_count = (
+            GLOBAL_WORKER_STATE_SET.get_counts())
+
+        uptime = time.time() - START_TIME
+        hours = uptime // 3600
+        minutes = (uptime - hours*3600) // 60
+        seconds = uptime % 60
+        uptime_str = '%dh:%.2dm:%2.ds' % (
+            hours, minutes, seconds)
+        result_string = (
+            'percent stitched: %.2f%% (%d)<br>'
+            'total to stitch: %d<br>'
+            'total left to stitch: %d<br>'
+            'uptime: %s<br>'
+            'active workers: %d<br>'
+            'ready workers: %d<br>' % (
+                100.0*stitched_count/total_count,
+                stitched_count,
+                total_count,
+                total_count-stitched_count,
+                uptime_str,
+                active_count, ready_count))
+        return result_string
+    except Exception as e:
+        return 'error: %s' % str(e)
 
 
 GLOBAL_STATUS = {}
