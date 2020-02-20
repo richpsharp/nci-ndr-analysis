@@ -653,8 +653,7 @@ if __name__ == '__main__':
                     os.path.splitext(os.path.basename(
                         target_token_complete_path))[0],
                     target_token_complete_path),
-                target_path_list=[
-                    global_stitch_raster_path, target_token_complete_path],
+                target_path_list=[target_token_complete_path],
                 ignore_path_list=[global_stitch_raster_path],
                 task_name='create empty global raster for %s' % (
                     os.path.basename(global_stitch_raster_path)))
