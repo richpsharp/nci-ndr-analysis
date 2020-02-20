@@ -488,7 +488,6 @@ def build_watershed_index(
             watershed_list.append((obj_id, watershed_shapely.bounds, obj))
             obj_id += 1
             watershed_shapely = None
-        break
     LOGGER.info('build the index')
     watershed_rtree = rtree.index.Index(watershed_list)
     LOGGER.info('index all done')
