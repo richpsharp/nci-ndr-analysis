@@ -240,11 +240,12 @@ def stitcher_worker(watershed_r_tree):
                         global_j_min >= global_ysize or
                         global_i_max < 0 or global_j_max < 0):
                     LOGGER.debug(stitch_raster_info)
-                    raise ValueError(
+                    LOGGER.error(
                         '%f %f %f %f out of bounds (%d, %d)',
                         global_i_min, global_j_min,
                         global_i_max, global_j_max,
                         global_xsize, global_ysize)
+                    continue
 
                 # clamp to fit in the global i/j rasters
                 stitch_i = 0
