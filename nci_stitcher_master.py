@@ -229,7 +229,7 @@ def processing_status():
         total_count = int(cursor.fetchone()[0])
         cursor.execute(
             'SELECT count(1) FROM job_status '
-            'WHERE (stiched=1)')
+            'WHERE (stitched=1)')
         stitched_count = int(cursor.fetchone()[0])
         connection.commit()
         connection.close()
@@ -299,7 +299,7 @@ def create_status_database(database_path, complete_token_path):
             lat_min FLOAT NOT NULL,
             lng_max FLOAT NOT NULL,
             lat_max FLOAT NOT NULL,
-            stiched INT NOT NULL);
+            stitched INT NOT NULL);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -325,7 +325,7 @@ def create_status_database(database_path, complete_token_path):
     insert_query = (
         'INSERT INTO job_status('
         'grid_id, scenario_id, raster_id, lng_min, lat_min, lng_max, lat_max, '
-        'stiched) '
+        'stitched) '
         'VALUES (?, ?, ?, ?, ?, ?, ?, 0)')
     cursor.executemany(insert_query, scenario_output_lat_lng_list)
     with open(complete_token_path, 'w') as complete_token_file:
@@ -353,7 +353,7 @@ def schedule_worker():
         cursor.execute(
             'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
-            'FROM job_status WHERE stiched=0 AND '
+            'FROM job_status WHERE stitched=0 AND '
             'lng_min>=10 AND lat_min>=0 AND lng_max<=16 AND lat_max<=4')
         payload_list = list(cursor.fetchall())
         connection.commit()
