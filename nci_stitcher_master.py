@@ -456,6 +456,10 @@ def global_stitcher(result_queue):
             global_band.FlushCache()
             global_band = None
             global_raster = None
+            try:
+                os.remove(local_tile_raster_path)
+            except OSError:
+                LOGGER.exception('unable to remove %s', local_tile_raster_path)
 
             while True:
                 try:
