@@ -355,10 +355,12 @@ def download_watershed(watershed_url, watershed_id, tdd_downloader):
                     watershed_url, watershed_id, decompress='unzip',
                     local_path=os.path.join('workspace_worker', watershed_id))
                 task_graph.join()
-        except requests.exceptions.HTTPError:
+        except requests.exceptions.HTTPError as e:
             # probably not a workspace we processed
             LOGGER.exception('exception in download_watershed')
-            raise
+            # if it's simply not found, that's fine...
+            if 'Not Found for url' not in str(e):
+                raise
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
