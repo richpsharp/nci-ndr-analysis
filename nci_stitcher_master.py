@@ -420,6 +420,27 @@ def global_stitcher(result_queue):
             global_band = None
             global_raster = None
 
+            while True:
+                try:
+                    connection = sqlite3.connect(STATUS_DATABASE_PATH)
+                    cursor = connection.cursor()
+                    LOGGER.debug(
+                        'setting grid id %s to stitched', payload['grid_id'])
+                    cursor.execute(
+                        'UPDATE job_status '
+                        'SET stitched=1 '
+                        'WHERE grid_id=?',
+                        (payload['grid_id'],))
+                    break
+                except Exception:
+                    LOGGER.exception('error on connection')
+                    time.sleep(0.1)
+                finally:
+                    connection.commit()
+                    cursor.close()
+                    connection.close()
+                    LOGGER.debug('%s inserted', payload['grid_id'])
+
         except Exception:
             LOGGER.exception('error on global stitcher')
             raise
