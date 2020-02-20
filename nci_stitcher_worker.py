@@ -200,6 +200,8 @@ def stitcher_worker(watershed_r_tree):
                 watershed_url = os.path.join(
                     AWS_BASE_URL, '%s.zip' % watershed_id)
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
+                if not tdd_downloader.exists(watershed_id):
+                    continue
                 global_inv_gt = gdal.InvGeoTransform(
                     global_raster_info['geotransform'])
                 LOGGER.debug('looking for %s.tif', raster_id)
