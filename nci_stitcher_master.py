@@ -546,6 +546,7 @@ def send_job(job_payload):
             'something bad happened, on %s for %s',
             worker_ip_port, job_payload)
         LOGGER.debug('removing %s from worker set', worker_ip_port)
+        ERROR_QUEUE.put(str(e))
         GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         raise
     finally:
@@ -635,7 +636,8 @@ def worker_status_monitor(error_queue):
                         if response.ok:
                             value['last_time_accessed'] = time.time()
                         else:
-                            raise RuntimeError('response not okay')
+                            raise RuntimeError(
+                                'response not okay: %s' % str(response))
                     except (ConnectionError, Exception):
                         failed_message = (
                             'failed job: %s on %s' %
