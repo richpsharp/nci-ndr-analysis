@@ -608,12 +608,11 @@ def make_empty_wgs84_raster(
             target_token_file.write(token_data+str(datetime.datetime.now()))
 
 
-def worker_status_monitor(error_queue):
+def worker_status_monitor(reschedule_queue):
     """Monitor the status of watershed workers and reschedule if down.
 
     Parameters:
-        error_queue (queue): if there's an error during processing it is put
-            in this queue for later reading by an update.
+        reschedule_queue (queue): if a host fails put the job on this queue.
 
     Returns:
         Never
@@ -643,7 +642,7 @@ def worker_status_monitor(error_queue):
                             'failed job: %s on %s' %
                             (value['watershed_fid_tuple_list'],
                              str((session_id, host))))
-                        error_queue.put(failed_message)
+                        ERROR_QUEUE.put(failed_message)
                         LOGGER.error(failed_message)
                         failed_job_list.append(
                             value['watershed_fid_tuple_list'])
@@ -653,9 +652,28 @@ def worker_status_monitor(error_queue):
                 del SCHEDULED_MAP[session_id]
             for watershed_fid_tuple_list in failed_job_list:
                 LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
-                RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
+                reschedule_queue.put(watershed_fid_tuple_list)
         except Exception:
             LOGGER.exception('exception in worker status monitor')
+
+
+def reschedule_worker(reschedule_queue):
+    """Reschedule any jobs that come through the schedule queue.
+
+    Parameters:
+        reschedule_queue (queue.Queue): queue that has jobs to reschedule.
+
+    Returns:
+        Never.
+
+    """
+    while True:
+        try:
+            watershed_fid_tuple_list = reschedule_queue.get()
+            LOGGER.debug('rescheduling %s', watershed_fid_tuple_list)
+            send_job(watershed_fid_tuple_list)
+        except Exception:
+            LOGGER.exception('something bad happened in reschedule_worker')
 
 
 if __name__ == '__main__':
@@ -714,26 +732,32 @@ if __name__ == '__main__':
 
     global RESULT_QUEUE
     RESULT_QUEUE = multiprocessing.Queue()
-    RESCHEDULE_QUEUE = queue.Queue()
+    global ERROR_QUEUE
     ERROR_QUEUE = queue.Queue()
-
     global GLOBAL_WORKER_STATE_SET
     GLOBAL_WORKER_STATE_SET = WorkerStateSet()
+
+    reschedule_queue = queue.Queue()
 
     LOGGER.debug('start threading')
     worker_status_monitor_thread = threading.Thread(
         target=worker_status_monitor,
-        args=(ERROR_QUEUE,))
+        args=(reschedule_queue))
     worker_status_monitor_thread.start()
 
     new_host_monitor_thread = threading.Thread(
         target=new_host_monitor,
-        args=(args.worker_list,))
+        args=(reschedule_queue, args.worker_list,))
     new_host_monitor_thread.start()
 
     scheduling_thread = threading.Thread(
         target=schedule_worker)
     scheduling_thread.start()
+
+    reschedule_worker_thread = threading.Thread(
+        target=reschedule_worker,
+        args=(reschedule_queue,))
+    reschedule_worker_thread.start()
 
     LOGGER.debug('making stitching process')
     stitcher_process = threading.Thread(
