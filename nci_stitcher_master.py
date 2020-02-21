@@ -59,9 +59,6 @@ logging.getLogger('taskgraph').setLevel(logging.INFO)
 
 DETECTOR_POLL_TIME = 30.0
 SCHEDULED_MAP = {}
-GLOBAL_LOCK = threading.Lock()
-RESULT_QUEUE = multiprocessing.Queue()
-RESCHEDULE_QUEUE = queue.Queue()
 WGS84_SR = osr.SpatialReference()
 WGS84_SR.ImportFromEPSG(4326)
 WGS84_WKT = WGS84_SR.ExportToWkt()
@@ -159,13 +156,12 @@ class WorkerStateSet(object):
         return removed_hosts
 
 
-GLOBAL_WORKER_STATE_SET = WorkerStateSet()
-
-
-def new_host_monitor(worker_list=None):
+def new_host_monitor(reschedule_queue, worker_list=None):
     """Watch for AWS worker instances on the network.
 
     Parameters:
+        reschedule_queue (queue.Queue): if a worker is working on a task but
+            then fails this function will put the job to restart in this queue.
         worker_list (list): if not not this is a list of ip:port strings that
             can be used to connect to workers. Used for running locally/debug.
 
@@ -199,19 +195,19 @@ def new_host_monitor(worker_list=None):
             dead_hosts = GLOBAL_WORKER_STATE_SET.update_host_set(
                 working_host_set)
             if dead_hosts:
-                with GLOBAL_LOCK:
-                    session_list_to_remove = []
-                    for session_id, value in SCHEDULED_MAP.items():
-                        if value['host'] in dead_hosts:
-                            LOGGER.debug(
-                                'found a dead host executing something: %s',
-                                value['host'])
-                            session_list_to_remove.append(session_id)
-                    for session_id in session_list_to_remove:
-                        RESCHEDULE_QUEUE.put(
-                            SCHEDULED_MAP[session_id][
-                                'watershed_fid_tuple_list'])
-                        del SCHEDULED_MAP[session_id]
+                session_list_to_remove = []
+                # making a list so it's atomic
+                for session_id, value in list(SCHEDULED_MAP.items()):
+                    if value['host'] in dead_hosts:
+                        LOGGER.debug(
+                            'found a dead host executing something: %s',
+                            value['host'])
+                        session_list_to_remove.append(session_id)
+                for session_id in session_list_to_remove:
+                    reschedule_queue.put(
+                        SCHEDULED_MAP[session_id][
+                            'watershed_fid_tuple_list'])
+                    del SCHEDULED_MAP[session_id]
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `new_host_monitor`')
@@ -248,13 +244,21 @@ def processing_status():
             'total left to stitch: %d<br>'
             'uptime: %s<br>'
             'active workers: %d<br>'
-            'ready workers: %d<br>' % (
+            'ready workers: %d<br>'
+            'error messages:<br><br>' % (
                 100.0*stitched_count/total_count,
                 stitched_count,
                 total_count,
                 total_count-stitched_count,
                 uptime_str,
                 active_count, ready_count))
+        while True:
+            try:
+                message = ERROR_QUEUE.get_nowait()
+                result_string += '* ' + message + '<br>'
+            except queue.Empty:
+                break
+
         return result_string
     except Exception as e:
         return 'error: %s' % str(e)
@@ -603,6 +607,55 @@ def make_empty_wgs84_raster(
             target_token_file.write(token_data+str(datetime.datetime.now()))
 
 
+def worker_status_monitor(error_queue):
+    """Monitor the status of watershed workers and reschedule if down.
+
+    Parameters:
+        error_queue (queue): if there's an error during processing it is put
+            in this queue for later reading by an update.
+
+    Returns:
+        Never
+
+    """
+    while True:
+        try:
+            time.sleep(DETECTOR_POLL_TIME)
+            current_time = time.time()
+            failed_job_list = []
+            hosts_to_remove = set()
+            # taking a list so it's atomic
+            for session_id, value in list(SCHEDULED_MAP.items()):
+                host = value['host']
+                if current_time - value['last_time_accessed']:
+                    try:
+                        LOGGER.debug('about to test status')
+                        response = requests.get(value['status_url'])
+                        LOGGER.debug('got status')
+                        if response.ok:
+                            value['last_time_accessed'] = time.time()
+                        else:
+                            raise RuntimeError('response not okay')
+                    except (ConnectionError, Exception):
+                        failed_message = (
+                            'failed job: %s on %s' %
+                            (value['watershed_fid_tuple_list'],
+                             str((session_id, host))))
+                        error_queue.put(failed_message)
+                        LOGGER.error(failed_message)
+                        failed_job_list.append(
+                            value['watershed_fid_tuple_list'])
+                        hosts_to_remove.add((session_id, host))
+            for session_id, host in hosts_to_remove:
+                GLOBAL_WORKER_STATE_SET.remove_host(host)
+                del SCHEDULED_MAP[session_id]
+            for watershed_fid_tuple_list in failed_job_list:
+                LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
+                RESCHEDULE_QUEUE.put(watershed_fid_tuple_list)
+        except Exception:
+            LOGGER.exception('exception in worker status monitor')
+
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='NCI NDR Stitching.')
@@ -657,7 +710,20 @@ if __name__ == '__main__':
                 task_name='create empty global raster for %s' % (
                     os.path.basename(global_stitch_raster_path)))
 
+    global RESULT_QUEUE
+    RESULT_QUEUE = multiprocessing.Queue()
+    RESCHEDULE_QUEUE = queue.Queue()
+    ERROR_QUEUE = queue.Queue()
+
+    global GLOBAL_WORKER_STATE_SET
+    GLOBAL_WORKER_STATE_SET = WorkerStateSet()
+
     LOGGER.debug('start threading')
+    worker_status_monitor_thread = threading.Thread(
+        target=worker_status_monitor,
+        args=(ERROR_QUEUE,))
+    worker_status_monitor_thread.start()
+
     new_host_monitor_thread = threading.Thread(
         target=new_host_monitor,
         args=(args.worker_list,))

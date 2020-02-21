@@ -499,6 +499,17 @@ def build_watershed_index(
     return watershed_rtree
 
 
+def reschedule_worker():
+    """Reschedule any jobs that come through the schedule queue."""
+    while True:
+        try:
+            watershed_fid_tuple_list = RESCHEDULE_QUEUE.get()
+            LOGGER.debug('rescheduling %s', watershed_fid_tuple_list)
+            send_job(watershed_fid_tuple_list)
+        except Exception:
+            LOGGER.exception('something bad happened in reschedule_worker')
+
+
 if __name__ == '__main__':
     for dir_path in [WORKSPACE_DIR, CHURN_DIR, ECOSHARD_DIR, WARP_DIR]:
         try:
@@ -538,6 +549,10 @@ if __name__ == '__main__':
         target=stitcher_worker, args=(watershed_r_tree,))
     LOGGER.debug('starting stitcher worker')
     stitcher_worker_thread.start()
+
+    reschedule_worker_thread = threading.Thread(
+        target=reschedule_worker)
+    reschedule_worker_thread.start()
 
     LOGGER.debug('starting app')
     APP.run(host='0.0.0.0', port=args.app_port)
