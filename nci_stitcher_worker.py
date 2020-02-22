@@ -213,16 +213,11 @@ def stitcher_worker(watershed_r_tree):
                 warp_raster_path = os.path.join(
                     WARP_DIR, '%s_%s' % (
                         watershed_id, os.path.basename(watershed_raster_path)))
-                warp_task = task_graph.add_task(
-                    func=pygeoprocessing.warp_raster,
-                    args=(
-                        watershed_raster_path,
-                        global_raster_info['pixel_size'], warp_raster_path,
-                        'near'),
-                    kwargs={'target_sr_wkt': global_raster_info['projection']},
-                    target_path_list=[warp_raster_path],
-                    task_name='warp %s' % watershed_raster_path)
-                warp_task.join()
+                LOGGER.debug('warp raster: %s', warp_raster_path)
+                pygeoprocessing.warp_raster(
+                    watershed_raster_path, global_raster_info['pixel_size'],
+                    warp_raster_path, 'near',
+                    target_sr_wkt=global_raster_info['projection'])
                 warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
                 warp_bb = warp_info['bounding_box']
 

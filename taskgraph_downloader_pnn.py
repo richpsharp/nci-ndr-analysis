@@ -181,7 +181,10 @@ class TaskGraphDownloader(object):
         if key not in self.key_to_path_task_map:
             raise ValueError('%s not a valid key' % key)
         for path in self.key_to_path_task_map[key]['created_files_list']:
-            os.remove(path)
+            try:
+                os.remove(path)
+            except Exception:
+                LOGGER.exception("can't remove %s" % path)
         del self.key_to_path_task_map[key]
 
     def join(self):
