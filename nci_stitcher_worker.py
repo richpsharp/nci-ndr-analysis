@@ -297,14 +297,18 @@ def stitcher_worker(watershed_r_tree):
                 try:
                     tdd_downloader.remove_files(watershed_id)
                 except OSError:
-                    LOGGER.warn(
-                        "couldn't remove %s" % tdd_downloader.get_path(
-                            watershed_id))
+                    LOGGER.exception(
+                        "warning: couldn't remove %s" %
+                        tdd_downloader.get_path(watershed_id))
+                try:
+                    os.remove(warp_raster_path)
+                except OSError:
+                    LOGGER.exception(
+                        "warning: couldn't remove %s" % warp_raster_path)
 
             global_band = None
             global_raster = None
 
-            # TODO: upload the .tif
             geotiff_s3_uri = (
                 "%s/%s/%s" %
                 (payload['bucket_uri_prefix'], scenario_id,
