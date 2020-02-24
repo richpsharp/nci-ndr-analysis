@@ -110,9 +110,10 @@ class TaskGraphDownloader(object):
             download_and_unzip(
                 ecoshard_url, self.download_dir, unzip_token_path)
             created_files_list.extend(
-                zipfile.ZipFile(os.path.join(
+                [os.path.join(self.download_dir, x)
+                 for x in zipfile.ZipFile(os.path.join(
                     self.download_dir, os.path.basename(
-                        ecoshard_url)), 'r').namelist())
+                        ecoshard_url)), 'r').namelist()])
             created_files_list.append(unzip_token_path)
             # add the zip file!
             created_files_list.append(os.path.join(
