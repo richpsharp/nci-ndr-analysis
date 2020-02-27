@@ -58,7 +58,7 @@ RASTER_PATH_BASE_LIST = [
     'n_export.tif', 'intermediate_outputs/modified_load_n.tif']
 
 AWS_BASE_URL = (
-    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/watershed_workspaces/')
+    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/watershed_workspaces/ndr_scenarios/')
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -196,9 +196,9 @@ def stitcher_worker(watershed_r_tree):
                     continue
                 basin_id = watershed_feature.GetField('BASIN_ID')
                 watershed_id = '%s_%d' % (watershed_basename, basin_id-1)
-                # test if resource exists
+                # path is base_url/scenario_id/watershed_id.zip
                 watershed_url = os.path.join(
-                    AWS_BASE_URL, '%s.zip' % watershed_id)
+                    AWS_BASE_URL, scenario_id, '%s.zip' % watershed_id)
                 download_watershed(watershed_url, watershed_id, tdd_downloader)
                 if not tdd_downloader.exists(watershed_id):
                     continue
