@@ -767,7 +767,7 @@ if __name__ == '__main__':
 
     scheduling_thread = threading.Thread(
         target=schedule_worker,
-        args=(*args.global_bounding_box))
+        args=args.global_bounding_box)
     scheduling_thread.start()
 
     reschedule_worker_thread = threading.Thread(
