@@ -361,8 +361,6 @@ def schedule_worker(
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
-        global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
-            global_bounding_box)
         cursor.execute(
             'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
