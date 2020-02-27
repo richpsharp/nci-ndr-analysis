@@ -339,8 +339,13 @@ def create_status_database(database_path, complete_token_path):
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
-def schedule_worker():
+def schedule_worker(valid_bounding_box=None):
     """Monitors STATUS_DATABASE_PATH and schedules work.
+
+    Parameters:
+        valid_bounding_box (list): if not None, this list contains
+            [lng_min, lat_min, lng_max, lat_max] for regions that should be
+            stitched. This is useful for debugging small sections of work.
 
     Returns:
         None.
@@ -354,10 +359,19 @@ def schedule_worker():
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
+        if valid_bounding_box:
+            global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
+                valid_bounding_box)
+        else:
+            # set huge bounds for the valid global space
+            global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
+                -181, -91, 181, 91)
         cursor.execute(
             'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
-            'FROM job_status WHERE stitched=0')
+            'FROM job_status WHERE stitched=0 AND '
+            'lng_min > ? AND lat_min > ? AND lng_max > ? AND lat_max > ?',
+            (global_lng_min, global_lat_min, global_lng_max, global_lat_max))
         payload_list = list(cursor.fetchall())
         connection.commit()
         connection.close()
