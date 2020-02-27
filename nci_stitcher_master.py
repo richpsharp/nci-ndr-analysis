@@ -339,13 +339,15 @@ def create_status_database(database_path, complete_token_path):
 
 
 #@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
-def schedule_worker(global_bounding_box):
+def schedule_worker(
+        global_lng_min, global_lat_min, global_lng_max, global_lat_max):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
-        global_bounding_box (list): [lng_min, lat_min, lng_max, lat_max] for
-            regions that should be stitched. This is useful for debugging
-            small sections of work.
+        global_lng_min (float): min lng value to process region (for debugging)
+        global_lat_min (float): min lat value to process region (for debugging)
+        global_lng_max (float): max lng value to process region (for debugging)
+        global_lat_max (float): max lat value to process region (for debugging)
 
     Returns:
         None.
@@ -765,7 +767,7 @@ if __name__ == '__main__':
 
     scheduling_thread = threading.Thread(
         target=schedule_worker,
-        args=(args.global_bounding_box))
+        args=(*args.global_bounding_box))
     scheduling_thread.start()
 
     reschedule_worker_thread = threading.Thread(
