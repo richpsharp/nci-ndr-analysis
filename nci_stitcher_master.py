@@ -338,7 +338,6 @@ def create_status_database(database_path, complete_token_path):
     connection.close()
 
 
-@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def schedule_worker(
         global_lng_min, global_lat_min, global_lng_max, global_lat_max):
     """Monitors STATUS_DATABASE_PATH and schedules work.
@@ -414,7 +413,6 @@ def processing_complete():
             flask.request.remote_addr, str(SCHEDULED_MAP))
 
 
-@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
 def global_stitcher(result_queue):
     """Worker to stitch global raster.
 
