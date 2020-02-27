@@ -339,13 +339,13 @@ def create_status_database(database_path, complete_token_path):
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
-def schedule_worker(valid_bounding_box=None):
+def schedule_worker(global_bounding_box):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Parameters:
-        valid_bounding_box (list): if not None, this list contains
-            [lng_min, lat_min, lng_max, lat_max] for regions that should be
-            stitched. This is useful for debugging small sections of work.
+        global_bounding_box (list): [lng_min, lat_min, lng_max, lat_max] for
+            regions that should be stitched. This is useful for debugging
+            small sections of work.
 
     Returns:
         None.
@@ -359,13 +359,8 @@ def schedule_worker(valid_bounding_box=None):
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
-        if valid_bounding_box:
-            global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
-                valid_bounding_box)
-        else:
-            # set huge bounds for the valid global space
-            global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
-                -181, -91, 181, 91)
+        global_lng_min, global_lat_min, global_lng_max, global_lat_max = (
+            global_bounding_box)
         cursor.execute(
             'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
@@ -702,6 +697,10 @@ if __name__ == '__main__':
     parser.add_argument(
         '--worker_list', type=str, nargs='+', default=None,
         help='ip:port strings for local workers.')
+    parser.add_argument(
+        '--global_bounding_box', type=float, nargs=4, default=(
+            -181, -91, 181, 91),
+        help="[lng_min, lat_min, lng_max, lat_max] global bounds.")
     args = parser.parse_args()
 
     for dir_path in [
@@ -765,7 +764,8 @@ if __name__ == '__main__':
     new_host_monitor_thread.start()
 
     scheduling_thread = threading.Thread(
-        target=schedule_worker)
+        target=schedule_worker,
+        args=(args.global_bounding_box))
     scheduling_thread.start()
 
     reschedule_worker_thread = threading.Thread(
