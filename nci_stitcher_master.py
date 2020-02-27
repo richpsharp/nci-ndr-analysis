@@ -755,7 +755,7 @@ if __name__ == '__main__':
     LOGGER.debug('start threading')
     worker_status_monitor_thread = threading.Thread(
         target=worker_status_monitor,
-        args=(reschedule_queue))
+        args=(reschedule_queue,))
     worker_status_monitor_thread.start()
 
     new_host_monitor_thread = threading.Thread(
