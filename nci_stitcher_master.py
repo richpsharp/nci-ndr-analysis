@@ -556,8 +556,6 @@ def send_job(job_payload):
         ERROR_QUEUE.put(str(e))
         GLOBAL_WORKER_STATE_SET.remove_host(worker_ip_port)
         raise
-    finally:
-        LOGGER.debug('in the finally')
 
 
 def make_empty_wgs84_raster(
@@ -647,19 +645,18 @@ def worker_status_monitor(reschedule_queue):
                     except (ConnectionError, Exception):
                         failed_message = (
                             'failed job: %s on %s' %
-                            (value['watershed_fid_tuple_list'],
+                            (value['job_payload'],
                              str((session_id, host))))
                         ERROR_QUEUE.put(failed_message)
                         LOGGER.error(failed_message)
-                        failed_job_list.append(
-                            value['watershed_fid_tuple_list'])
+                        failed_job_list.append(value['job_payload'])
                         hosts_to_remove.add((session_id, host))
             for session_id, host in hosts_to_remove:
                 GLOBAL_WORKER_STATE_SET.remove_host(host)
                 del SCHEDULED_MAP[session_id]
-            for watershed_fid_tuple_list in failed_job_list:
-                LOGGER.debug('rescheduling %s', str(watershed_fid_tuple_list))
-                reschedule_queue.put(watershed_fid_tuple_list)
+            for job_payload in failed_job_list:
+                LOGGER.debug('rescheduling %s', str(job_payload))
+                reschedule_queue.put(job_payload)
         except Exception:
             LOGGER.exception('exception in worker status monitor')
 
@@ -676,9 +673,9 @@ def reschedule_worker(reschedule_queue):
     """
     while True:
         try:
-            watershed_fid_tuple_list = reschedule_queue.get()
-            LOGGER.debug('rescheduling %s', watershed_fid_tuple_list)
-            send_job(watershed_fid_tuple_list)
+            job_payload = reschedule_queue.get()
+            LOGGER.debug('rescheduling %s', job_payload)
+            send_job(job_payload)
         except Exception:
             LOGGER.exception('something bad happened in reschedule_worker')
 
