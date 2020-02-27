@@ -365,7 +365,7 @@ def schedule_worker(
             'SELECT grid_id, scenario_id, raster_id, '
             'lng_min, lat_min, lng_max, lat_max '
             'FROM job_status WHERE stitched=0 AND '
-            'lng_min < ? AND lat_min < ? AND lng_max > ? AND lat_max > ?',
+            'lng_min >= ? AND lat_min >= ? AND lng_max <= ? AND lat_max <= ?',
             (global_lng_min, global_lat_min, global_lng_max, global_lat_max))
         payload_list = list(cursor.fetchall())
         connection.commit()
