@@ -338,7 +338,7 @@ def create_status_database(database_path, complete_token_path):
     connection.close()
 
 
-@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
+#@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def schedule_worker(global_bounding_box):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
