@@ -193,8 +193,8 @@ if __name__ == '__main__':
         local_path='watersheds_globe_HydroSHEDS_15arcseconds')
 
     raster_path_base_list = [
-        'n_export.tif',
-        'intermediate_outputs/modified_load_n.tif',
+        #'n_export.tif',
+        'intermediate_outputs/stream.tif',
         ]
     global_raster_info_map = {}
     for raster_path_pattern in raster_path_base_list:
