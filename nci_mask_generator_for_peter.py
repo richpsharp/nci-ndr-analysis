@@ -6,7 +6,8 @@ import sys
 
 from osgeo import gdal
 from osgeo import ogr
-import ecoshard
+from osgeo import osr
+import numpy
 import pandas
 import pygeoprocessing
 import taskgraph
@@ -44,6 +45,7 @@ logging.basicConfig(
         '%(name)s [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
+logging.getLogger('taskgraph').setLevel(logging.INFO)
 
 
 def gs_copy(uri_path, target_path):
@@ -51,6 +53,21 @@ def gs_copy(uri_path, target_path):
     subprocess.run([
         f'gsutil cp "{uri_path}" "{target_path}"'],
         shell=True, check=True)
+
+
+def mask_by_array_op(base_array, mask_array, base_nodata, target_nodata):
+    result = base_array.copy()
+    result[mask_array == 1] = 0
+    return result
+
+
+def mask_out_raster(base_raster_path, mask_raster_path, target_raster_path):
+    """Pass."""
+    raster_info = pygeoprocessing.get_raster_info(base_raster_path)
+    pygeoprocessing.raster_calculator(
+        [(base_raster_path, 1), (mask_raster_path, 1),
+         (raster_info['nodata'][0], 'raw'), (255, 'raw')],
+        mask_by_array_op, target_raster_path, gdal.GDT_Byte, 255)
 
 
 def threshold_value_op(
@@ -66,21 +83,20 @@ def threshold_by_value(
         base_raster_path, threshold_value, target_raster_path):
     """If base <= threshold, then 1, otherwise 0."""
     base_raster_info = pygeoprocessing.get_raster_info(base_raster_path)
-    threshold_raster_info = pygeoprocessing.get_raster_info(
-        threshold_raster_path)
     target_nodata = 255
 
     pygeoprocessing.raster_calculator(
         [(base_raster_path, 1),
          (threshold_value, 'raw'),
          (base_raster_info['nodata'][0], 'raw'),
-         (target_nodata, 'raw')], threshold_value_op, gdal.GDT_Byte,
-        target_nodata)
+         (target_nodata, 'raw')], threshold_value_op, target_raster_path,
+        gdal.GDT_Byte, target_nodata)
 
 
 def threshold_array_op(
         base_array, threshold_array, base_nodata, threshold_nodata,
         target_nodata):
+    """Threshold base array by the threshold array."""
     result = numpy.empty(base_array.shape, dtype=numpy.uint8)
     result[:] = target_nodata
     valid_mask = (
@@ -102,11 +118,12 @@ def threshold_by_raster(
         [(base_raster_path, 1), (threshold_raster_path, 1),
          (base_raster_info['nodata'][0], 'raw'),
          (threshold_raster_info['nodata'][0], 'raw'),
-         (target_nodata, 'raw')], threshold_array_op, gdal.GDT_Byte,
-         target_nodata)
+         (target_nodata, 'raw')], threshold_array_op, target_raster_path,
+        gdal.GDT_Byte, target_nodata)
 
 
 def mask_op(base_array, value, nodata, target_nodata):
+    """mask array by specific value."""
     result = numpy.empty(base_array.shape, dtype=numpy.uint8)
     result[:] = target_nodata
     valid_mask = base_array != nodata
@@ -137,7 +154,7 @@ def erode_one_pixel(base_raster_path, target_raster_path):
     kernel_raster = None
 
     pygeoprocessing.convolve_2d(
-        (base_raster_path, 1), (kernel_raster_path, 1), target_path,
+        (base_raster_path, 1), (kernel_raster_path, 1), target_raster_path,
         target_datatype=gdal.GDT_Byte,
         target_nodata=255)
 
@@ -149,7 +166,7 @@ def mask_raster(base_raster_path, code_to_mask, target_raster_path):
     pygeoprocessing.raster_calculator(
         [(base_raster_path, 1), (code_to_mask, 'raw'),
          (base_info['nodata'][0], 'raw'), (target_nodata, 'raw')],
-        mask_op, gdal.GDT_Byte, target_nodata)
+        mask_op, target_raster_path, gdal.GDT_Byte, target_nodata)
 
 
 def modify_vector(
@@ -266,7 +283,7 @@ def main():
 
     # create resampled stream raster
     low_res_stream_raster_path = os.path.join(CHURN_DIR, 'low_res_streams.tif')
-    max_slope_task = task_graph.add_task(
+    low_res_stream_task = task_graph.add_task(
         func=pygeoprocessing.warp_raster,
         args=(
             stream_raster_path, lulc_info['pixel_size'],
@@ -311,7 +328,9 @@ def main():
                 slope_raster_path, slope_threshold_raster_path,
                 target_raster_path),
             target_raster_path_list=[target_raster_path],
-            dependent_task_list=[max_slope_task, average_slope_task],
+            dependent_task_list=[
+                rasterize_slope_threshold_task, max_slope_task,
+                average_slope_task],
             task_name=(
                 f'threshold raster {os.path.basename(target_raster_path)}'))
 
@@ -332,8 +351,19 @@ def main():
                 slope_raster_path, 10.0, target_raster_path),
             target_raster_path_list=[target_raster_path],
             dependent_task_list=[max_slope_task, average_slope_task],
-            task_name=\
-                f'threshold raster {os.path.basename(target_raster_path)}')
+            task_name=(
+                f'threshold raster {os.path.basename(target_raster_path)}'))
+
+    # set anywhere landcode is water body back to zero
+    riparian_buffer_raster_path = os.path.join(
+        WORKSPACE_DIR, 'riparian_buffer_mask.tif')
+
+    task_graph.add_task(
+        func=mask_out_raster,
+        args=(low_res_stream_raster_path, water_body_mask_raster_path),
+        dependent_task_list=[low_res_stream_task, water_body_mask_task],
+        target_path_list=[riparian_buffer_raster_path],
+        task_name='riparian buffer mask out')
 
     task_graph.close()
     task_graph.join()
