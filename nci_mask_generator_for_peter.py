@@ -1,6 +1,7 @@
 """NCI Special Scenario Generator for Peter's masks."""
 import logging
 import os
+import multiprocessing
 import shutil
 import subprocess
 import sys
@@ -215,7 +216,7 @@ def main():
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
+    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
 
     slope_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_SLOPE_URI))
