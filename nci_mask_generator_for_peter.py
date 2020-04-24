@@ -64,7 +64,7 @@ def main():
             (base_lulc_raster_path, BASE_LULC_RASTER_URL)]:
         task_graph.add_task(
             func=ecoshard.download_url,
-            args=(raster_path, ecoshard_url),
+            args=(ecoshard_url, raster_path),
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
 
