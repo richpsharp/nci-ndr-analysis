@@ -58,16 +58,16 @@ def main():
     task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, -1)
 
     slope_raster_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(GLOBAL_SLOPE_URL))
+        ECOSHARD_DIR, os.path.basename(GLOBAL_SLOPE_URI))
     stream_raster_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(GLOBAL_STREAMS_URL))
+        ECOSHARD_DIR, os.path.basename(GLOBAL_STREAMS_URI))
     base_lulc_raster_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URL))
+        ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URI))
 
     for raster_path, ecoshard_uri in [
-            (slope_raster_path, GLOBAL_SLOPE_URL),
-            (stream_raster_path, GLOBAL_STREAMS_URL),
-            (base_lulc_raster_path, BASE_LULC_RASTER_URL)]:
+            (slope_raster_path, GLOBAL_SLOPE_URI),
+            (stream_raster_path, GLOBAL_STREAMS_URI),
+            (base_lulc_raster_path, BASE_LULC_RASTER_URI)]:
         task_graph.add_task(
             func=gs_copy,
             args=(ecoshard_uri, raster_path),
