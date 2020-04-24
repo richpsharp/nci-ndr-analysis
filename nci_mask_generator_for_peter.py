@@ -3,6 +3,7 @@ import logging
 import os
 import sys
 
+from osgeo import gdal
 import ecoshard
 import pandas
 import pygeoprocessing
@@ -65,8 +66,6 @@ def main():
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
 
-
-
     slope_threshold_df = pandas.read_csv(SLOPE_THRESHOLD_PATH)
     slope_threshold_map = {
         iso3: float(val) for iso3, val in zip(
@@ -76,7 +75,12 @@ def main():
 
     slope_threshold_raster_path = os.path.join(
         CHURN_DIR, 'slope_threshold_jamie.tif')
-    pygeoprocessing.
+    task_graph.add_task(
+        func=pygeoprocessing.new_raster_from_base,
+        args=(base_lulc_raster_path, slope_threshold_raster_path,
+              gdal.GDT_Byte, [255]),
+        target_path_list=[slope_threshold_raster_path],
+        task_name='new slope slope_threshold_raster_path')
 
     task_graph.close()
     task_graph.join()
