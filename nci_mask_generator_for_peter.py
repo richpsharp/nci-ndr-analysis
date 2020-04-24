@@ -340,7 +340,7 @@ def main():
             args=(
                 slope_raster_path, slope_threshold_raster_path,
                 target_raster_path),
-            target_raster_path_list=[target_raster_path],
+            target_path_list=[target_raster_path],
             dependent_task_list=[
                 rasterize_slope_threshold_task, max_slope_task,
                 average_slope_task],
@@ -362,7 +362,7 @@ def main():
             func=threshold_by_value,
             args=(
                 slope_raster_path, 10.0, target_raster_path),
-            target_raster_path_list=[target_raster_path],
+            target_path_list=[target_raster_path],
             dependent_task_list=[max_slope_task, average_slope_task],
             task_name=(
                 f'threshold raster {os.path.basename(target_raster_path)}'))
