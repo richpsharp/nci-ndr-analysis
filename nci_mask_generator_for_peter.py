@@ -36,8 +36,7 @@ BASE_LULC_RASTER_URI = (
 
 GLOBAL_COUNTRY_URI = (
     'gs://critical-natural-capital-ecoshards/realized_service_ecoshards/'
-    'by_country/'
-    'countries_singlepart_md5_b7aaa5bc55cefc1f28d9655629c2c702.gpkg')
+    'countries_iso3_md5_6fb2431e911401992e6e56ddf0a9bcda.gpkg')
 
 logging.basicConfig(
     level=logging.DEBUG,
