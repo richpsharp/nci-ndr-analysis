@@ -18,10 +18,10 @@ SLOPE_THRESHOLD_PATH = os.path.join('data', 'jamie_slope_thresholds.csv')
 LOGGER = logging.getLogger(__name__)
 
 GLOBAL_SLOPE_URL = (
-    'https://storage.googleapis.com/shared-with-users/topo_variables/'
+    'https://storage.googleapis.com/ecoshard-root/topo_variables/'
     'global_slope_3s.tif')
-    #'https://storage.googleapis.com/ecoshard-root/topo_variables/'
-    #'global_slope_3s.tif')
+    # 'https://storage.googleapis.com/shared-with-users/topo_variables/'
+    # 'global_slope_3s.tif')
 
 GLOBAL_STREAMS_URL = (
     'https://storage.googleapis.com/shared-with-users/'
