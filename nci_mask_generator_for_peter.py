@@ -1,6 +1,7 @@
 """NCI Special Scenario Generator for Peter's masks."""
 import logging
 import os
+import subprocess
 import sys
 
 from osgeo import gdal
@@ -17,18 +18,16 @@ SLOPE_THRESHOLD_PATH = os.path.join('data', 'jamie_slope_thresholds.csv')
 
 LOGGER = logging.getLogger(__name__)
 
-GLOBAL_SLOPE_URL = (
-    'https://storage.googleapis.com/ecoshard-root/topo_variables/'
-    'global_slope_3s.tif')
-    # 'https://storage.googleapis.com/shared-with-users/topo_variables/'
+GLOBAL_SLOPE_URI = 'gs://ecoshard-root/topo_variables/global_slope_3s.tif'
+    # 'gs://shared-with-users/topo_variables/'
     # 'global_slope_3s.tif')
 
-GLOBAL_STREAMS_URL = (
-    'https://storage.googleapis.com/shared-with-users/'
+GLOBAL_STREAMS_URI = (
+    'gs://shared-with-users/'
     'global_streams_from_ndr_md5_d41aa48e92005fe79287ae4a66efb412.tif')
 
-BASE_LULC_RASTER_URL = (
-    'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
+BASE_LULC_RASTER_URI = (
+    'gs://critical-natural-capital-ecoshards/'
     'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
     'md5_1254d25f937e6d9bdee5779d377c5aa4.tif')
 
@@ -39,6 +38,13 @@ logging.basicConfig(
         '%(name)s [%(funcName)s:%(lineno)d] %(message)s'),
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
+
+
+def gs_copy(uri_path, target_path):
+    """Use gsutil to copy local file."""
+    subprocess.run([
+        f'gsutil cp "{uri_path}" "{target_path}"'],
+        shell=True, check=True)
 
 
 def main():
@@ -58,13 +64,13 @@ def main():
     base_lulc_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URL))
 
-    for raster_path, ecoshard_url in [
+    for raster_path, ecoshard_uri in [
             (slope_raster_path, GLOBAL_SLOPE_URL),
             (stream_raster_path, GLOBAL_STREAMS_URL),
             (base_lulc_raster_path, BASE_LULC_RASTER_URL)]:
         task_graph.add_task(
-            func=ecoshard.download_url,
-            args=(ecoshard_url, raster_path),
+            func=gs_copy,
+            args=(ecoshard_uri, raster_path),
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
 
