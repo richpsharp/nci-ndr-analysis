@@ -117,11 +117,16 @@ def threshold_by_raster(
         threshold_raster_path)
     target_nodata = 255
 
+    align_id = (
+        f'{os.path.splitext(os.path.basename(base_raster_path))[0]}_'
+        f'{os.path.splitext(os.path.basename(threshold_raster_path))[0]}')
+
     # align rasters
     align_raster_path_list = [
         os.path.join(
             CHURN_DIR,
-            f'{os.path.basename(os.path.splitext(path))}')
+            f'aligned_{align_id}_'
+            f'{os.path.basename(os.path.splitext(path)[0])}.tif')
         for path in [base_raster_path, threshold_raster_path]]
 
     pygeoprocessing.align_and_resize_raster_stack(
