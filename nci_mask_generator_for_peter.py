@@ -56,6 +56,7 @@ def gs_copy(uri_path, target_path):
 
 
 def mask_by_array_op(base_array, mask_array, base_nodata, target_nodata):
+    """Mask base by a mask array where it's 1 base goes to 0."""
     result = base_array.copy()
     result[mask_array == 1] = 0
     return result
@@ -72,6 +73,7 @@ def mask_out_raster(base_raster_path, mask_raster_path, target_raster_path):
 
 def threshold_value_op(
         base_array, threshold_value, base_nodata, target_nodata):
+    """If base > threshold, set to 0."""
     result = numpy.empty(base_array.shape, dtype=numpy.uint8)
     result[:] = target_nodata
     valid_mask = ~numpy.isclose(base_array, base_nodata)
@@ -123,7 +125,7 @@ def threshold_by_raster(
 
 
 def mask_op(base_array, value, nodata, target_nodata):
-    """mask array by specific value."""
+    """Mask array by specific value."""
     result = numpy.empty(base_array.shape, dtype=numpy.uint8)
     result[:] = target_nodata
     valid_mask = base_array != nodata
