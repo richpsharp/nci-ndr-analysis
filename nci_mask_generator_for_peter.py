@@ -191,7 +191,8 @@ def modify_vector(
     vector = gdal.OpenEx(target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     layer = vector.GetLayer()
     layer.CreateField(ogr.FieldDefn(target_field, ogr.OFTReal))
-    layer.FlushCache()
+    layer.SyncToDisk()
+
     for feature in layer:
         field_value = feature.GetField(index_field)
         if field_value in index_to_value_map:
