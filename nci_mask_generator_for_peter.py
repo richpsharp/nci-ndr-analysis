@@ -202,6 +202,9 @@ def modify_vector(
         else:
             feature.SetField(target_field, 0.0)
         layer.SetFeature(feature)
+        feature = None
+    layer = None
+    vector = None
 
 
 def main():
