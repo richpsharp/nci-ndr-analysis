@@ -192,8 +192,13 @@ def modify_vector(
     layer = vector.GetLayer()
     layer.CreateField(ogr.FieldDefn(target_field, ogr.OFTReal))
     for feature in layer:
-        value = index_to_value_map[feature.GetField(index_field)]
-        feature.SetField(target_field, value)
+        field_value = feature.GetField(index_field)
+        if field_value in index_to_value_map:
+            value = index_to_value_map[field_value]
+            feature.SetField(target_field, value)
+            layer.SetFeature(feature)
+        else:
+            feature.SetField(target_field, 0.0)
         layer.SetFeature(feature)
 
 
