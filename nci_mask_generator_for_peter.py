@@ -289,6 +289,7 @@ def main():
     task_graph.add_task(
         func=erode_one_pixel,
         args=(water_body_mask_raster_path, extended_water_body_raster_path),
+        dependent_task_list=[water_body_mask_task],
         target_path_list=[extended_water_body_raster_path],
         task_name='extend water body mask')
 
