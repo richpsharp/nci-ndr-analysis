@@ -131,7 +131,7 @@ def threshold_by_raster(
 
     pygeoprocessing.align_and_resize_raster_stack(
         [base_raster_path, threshold_raster_path], align_raster_path_list,
-        ['near']*2, base_raster_path['pixel_size'], 'intersection')
+        ['near']*2, base_raster_info['pixel_size'], 'intersection')
 
     pygeoprocessing.raster_calculator(
         [(align_raster_path_list[0], 1), (align_raster_path_list[1], 1),
