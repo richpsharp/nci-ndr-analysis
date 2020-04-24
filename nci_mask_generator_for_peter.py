@@ -1,6 +1,7 @@
 """NCI Special Scenario Generator for Peter's masks."""
 import logging
 import os
+import shutil
 import subprocess
 import sys
 
@@ -187,7 +188,7 @@ def modify_vector(
         None.
 
     """
-    os.copy(base_vector_path, target_vector_path)
+    shutil.copy(base_vector_path, target_vector_path)
     vector = gdal.OpenEx(target_vector_path, gdal.OF_VECTOR | gdal.GA_Update)
     layer = vector.GetLayer()
     layer.CreateField(ogr.FieldDefn(target_field, ogr.OFTReal))
