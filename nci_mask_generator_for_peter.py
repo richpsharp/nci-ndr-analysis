@@ -374,7 +374,9 @@ def main():
 
     task_graph.add_task(
         func=mask_out_raster,
-        args=(low_res_stream_raster_path, water_body_mask_raster_path),
+        args=(
+            low_res_stream_raster_path, water_body_mask_raster_path,
+            riparian_buffer_raster_path),
         dependent_task_list=[low_res_stream_task, water_body_mask_task],
         target_path_list=[riparian_buffer_raster_path],
         task_name='riparian buffer mask out')
