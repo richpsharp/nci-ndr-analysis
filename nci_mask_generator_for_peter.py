@@ -267,7 +267,7 @@ def main():
     create_empty_threshold_raster_task = task_graph.add_task(
         func=pygeoprocessing.new_raster_from_base,
         args=(base_lulc_raster_path, slope_threshold_raster_path,
-              gdal.GDT_Byte, [255]),
+              gdal.GDT_Float32, [-1]),
         hash_target_files=False,
         target_path_list=[slope_threshold_raster_path],
         task_name='new slope slope_threshold_raster_path')
@@ -290,6 +290,9 @@ def main():
             max_slope_task, create_empty_threshold_raster_task],
         target_path_list=[slope_threshold_raster_path],
         task_name='rasterize max slope')
+
+    rasterize_slope_threshold_task.join()
+    return
 
     # make mask of water bodies
     water_body_mask_raster_path = os.path.join(
