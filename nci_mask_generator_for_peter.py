@@ -283,9 +283,7 @@ def main():
     rasterize_slope_threshold_task = task_graph.add_task(
         func=pygeoprocessing.rasterize,
         args=(max_slope_vector_path, slope_threshold_raster_path),
-        kwargs={'option_list': ['ATTRIBUTE="max_slope"']},
-        ignore_path_list=[slope_threshold_raster_path],
-        hash_target_files=False,
+        kwargs={'option_list': ['ATTRIBUTE=max_slope']},
         dependent_task_list=[
             max_slope_task, create_empty_threshold_raster_task],
         target_path_list=[slope_threshold_raster_path],
