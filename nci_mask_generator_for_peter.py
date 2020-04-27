@@ -357,7 +357,7 @@ def main():
     dem_in_degrees_raster_path = os.path.join(
         CHURN_DIR, 'dem_in_degrees.tif')
     dem_vrt_nodata = -9999
-    lng_m_to_d_array = numpy.array([dpm_task.get()])
+    lng_m_to_d_array = dpm_task.get()
     dem_to_degrees = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
