@@ -350,7 +350,8 @@ def main():
 
     # create meters to degree array
     dpm_task = task_graph.add_task(
-        func=degrees_per_meter(vrt_bb[3], vrt_bb[1], n_rows),
+        func=degrees_per_meter,
+        args=(vrt_bb[3], vrt_bb[1], n_rows),
         task_name='degrees_per_meter array')
 
     dem_in_degrees_raster_path = os.path.join(
