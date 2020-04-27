@@ -306,7 +306,7 @@ def main():
 
     dem_zip_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_DEM_URI))
-    dem_dir_path = os.path.join(dem_zip_path, 'global_dem_3s')
+    dem_dir_path = os.path.join(ECOSHARD_DIR, 'dem', 'global_dem_3s')
 
     for raster_path, ecoshard_uri in [
             (stream_raster_path, GLOBAL_STREAMS_URI),
