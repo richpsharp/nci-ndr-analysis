@@ -368,7 +368,7 @@ def main():
 
     slope_raster_path = os.path.join(CHURN_DIR, 'slope.tif')
     slope_task = task_graph.add_task(
-        fcun=pygeoprocessing.calculate_slope,
+        func=pygeoprocessing.calculate_slope,
         args=((dem_in_degrees_raster_path, 1), slope_raster_path),
         dependent_task_list=[dem_to_degrees],
         target_path_list=[slope_raster_path],
