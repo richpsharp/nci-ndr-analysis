@@ -53,6 +53,12 @@ LOGGER = logging.getLogger(__name__)
 logging.getLogger('taskgraph').setLevel(logging.INFO)
 
 
+def build_vrt(vrt_raster_path, raster_path_list):
+    """Build a VRT and capture the result so it doesn't raise an exception."""
+    _ = gdal.BuildVRT(vrt_raster_path, raster_path_list)
+    return None
+
+
 def mult_op(base_array, base_nodata, factor_array, target_nodata):
     """Multipy base by a constant factor array."""
     result = numpy.empty_like(base_array)
@@ -330,7 +336,7 @@ def main():
     # create VRT
     dem_vrt_raster_path = os.path.join(dem_dir_path, 'dem.vrt')
     build_vrt_task = task_graph.add_task(
-        func=gdal.BuildVRT,
+        func=build_vrt,
         args=(dem_vrt_raster_path, glob.glob(
             os.path.join(dem_dir_path, '*.tif'))),
         target_path_list=[dem_vrt_raster_path],
