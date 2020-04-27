@@ -9,6 +9,7 @@ import sys
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+import ecoshard
 import numpy
 import pandas
 import pygeoprocessing
@@ -256,6 +257,13 @@ def main():
             args=(ecoshard_uri, raster_path),
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
+
+    dem_dir = os.path.join(ECOSHARD_DIR, 'dem')
+    task_graph.add_task(
+        func=ecoshard.download_and_unzip,
+        args=(GLOBAL_DEM_URI, dem_dir),
+        task_name='download and unzip dem')
+
     task_graph.close()
     task_graph.join()
     return
