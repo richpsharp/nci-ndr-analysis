@@ -245,10 +245,7 @@ def main():
         ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URI))
     global_country_vector_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_COUNTRY_URI))
-    global_dem_zip_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(GLOBAL_DEM_URI))
     for raster_path, ecoshard_uri in [
-            (global_dem_zip_path, GLOBAL_DEM_URI),
             (stream_raster_path, GLOBAL_STREAMS_URI),
             (base_lulc_raster_path, BASE_LULC_RASTER_URI),
             (global_country_vector_path, GLOBAL_COUNTRY_URI)]:
