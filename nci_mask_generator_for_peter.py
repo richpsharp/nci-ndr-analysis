@@ -411,9 +411,6 @@ def main():
         task_name='rasterize max slope')
 
     rasterize_slope_threshold_task.join()
-    task_graph.close()
-    task_graph.join()
-    return
 
     # make mask of water bodies
     water_body_mask_raster_path = os.path.join(
