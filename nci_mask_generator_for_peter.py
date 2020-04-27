@@ -16,6 +16,9 @@ import pygeoprocessing
 import taskgraph
 import zipfile
 
+# set a 512MB limit for the cache
+gdal.SetCacheMax(2**29)
+
 WORKSPACE_DIR = 'nci_peter_mask_workspaces'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
