@@ -24,7 +24,9 @@ LOGGER = logging.getLogger(__name__)
 
 LULC_WATER = 210
 
-GLOBAL_SLOPE_URI = 'gs://ecoshard-root/topo_variables/global_slope_3s.tif'
+GLOBAL_DEM_URI = (
+    'gs://global-invest-sdr-data/'
+    'global_dem_3s_md5_22d0c3809af491fa09d03002bdf09748.zip')
 
 GLOBAL_STREAMS_URI = (
     'gs://shared-with-users/'
