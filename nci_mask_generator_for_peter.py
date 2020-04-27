@@ -362,8 +362,9 @@ def main():
         func=pygeoprocessing.raster_calculator,
         args=(
             [(dem_vrt_raster_path, 1), (dem_vrt_nodata, 'raw'),
-             lng_m_to_d_array, (vrt_info['nodata'][0], 'raw')], mult_op,
-            dem_in_degrees_raster_path, vrt_info['datatype'], dem_vrt_nodata),
+             lng_m_to_d_array[:, None], (vrt_info['nodata'][0], 'raw')],
+            mult_op, dem_in_degrees_raster_path, vrt_info['datatype'],
+            dem_vrt_nodata),
         target_path_list=[dem_in_degrees_raster_path],
         task_name='convert dem to degrees')
 
