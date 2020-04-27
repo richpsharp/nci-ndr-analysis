@@ -229,7 +229,8 @@ def modify_vector(
 
 def main():
     """Entry point."""
-    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR]:
+    dem_dir = os.path.join(ECOSHARD_DIR, 'dem')
+    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, dem_dir]:
         try:
             os.makedirs(dir_path)
         except OSError:
@@ -255,7 +256,6 @@ def main():
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
 
-    dem_dir = os.path.join(ECOSHARD_DIR, 'dem')
     task_graph.add_task(
         func=ecoshard.download_and_unzip,
         args=(GLOBAL_DEM_URI, dem_dir),
