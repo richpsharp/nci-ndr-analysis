@@ -14,6 +14,7 @@ import numpy
 import pandas
 import pygeoprocessing
 import taskgraph
+import zipfile
 
 WORKSPACE_DIR = 'nci_peter_mask_workspaces'
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshard')
@@ -227,9 +228,15 @@ def modify_vector(
     vector = None
 
 
+def unzip(zipfile_path, target_dir):
+    """Unzip file to target dir."""
+    with zipfile.ZipFile(zipfile_path, 'r') as zip_ref:
+        zip_ref.extractall(target_dir)
+
+
 def main():
     """Entry point."""
-    dem_dir = os.path.join(ECOSHARD_DIR, 'dem')
+    dem_dir = os.path.join(CHURN_DIR, 'dem')
     for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, dem_dir]:
         try:
             os.makedirs(dir_path)
@@ -246,23 +253,32 @@ def main():
         ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URI))
     global_country_vector_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_COUNTRY_URI))
+
+    dem_zip_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(GLOBAL_DEM_URI))
+
     for raster_path, ecoshard_uri in [
             (stream_raster_path, GLOBAL_STREAMS_URI),
             (base_lulc_raster_path, BASE_LULC_RASTER_URI),
-            (global_country_vector_path, GLOBAL_COUNTRY_URI)]:
+            (global_country_vector_path, GLOBAL_COUNTRY_URI),
+            (dem_zip_path, GLOBAL_DEM_URI)]:
         task_graph.add_task(
             func=gs_copy,
             args=(ecoshard_uri, raster_path),
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
 
+    task_graph.join()
+
+    # extract dem:
     task_graph.add_task(
-        func=ecoshard.download_and_unzip,
-        args=(GLOBAL_DEM_URI, dem_dir),
-        task_name='download and unzip dem')
+        func=unzip,
+        args=(dem_zip_path, dem_dir),
+        task_name='unzip dem')
 
     task_graph.close()
     task_graph.join()
+
     return
 
     slope_threshold_df = pandas.read_csv(SLOPE_THRESHOLD_PATH)
