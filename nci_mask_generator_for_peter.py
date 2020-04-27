@@ -234,19 +234,20 @@ def main():
         except OSError:
             pass
 
-    task_graph = taskgraph.TaskGraph(WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
+    task_graph = taskgraph.TaskGraph(
+        WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
 
-    slope_raster_path = os.path.join(
-        ECOSHARD_DIR, os.path.basename(GLOBAL_SLOPE_URI))
+    slope_raster_path = os.path.join(CHURN_DIR, 'slope.tif')
     stream_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_STREAMS_URI))
     base_lulc_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(BASE_LULC_RASTER_URI))
     global_country_vector_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_COUNTRY_URI))
-
+    global_dem_zip_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(GLOBAL_DEM_URI))
     for raster_path, ecoshard_uri in [
-            (slope_raster_path, GLOBAL_SLOPE_URI),
+            (global_dem_zip_path, GLOBAL_DEM_URI),
             (stream_raster_path, GLOBAL_STREAMS_URI),
             (base_lulc_raster_path, BASE_LULC_RASTER_URI),
             (global_country_vector_path, GLOBAL_COUNTRY_URI)]:
@@ -255,7 +256,9 @@ def main():
             args=(ecoshard_uri, raster_path),
             target_path_list=[raster_path],
             task_name=f'download {os.path.basename(raster_path)}')
+    task_graph.close()
     task_graph.join()
+    return
 
     slope_threshold_df = pandas.read_csv(SLOPE_THRESHOLD_PATH)
     slope_threshold_map = {
