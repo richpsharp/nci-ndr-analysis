@@ -1,5 +1,6 @@
 """NCI Special Scenario Generator for Peter's masks."""
 import logging
+import glob
 import os
 import multiprocessing
 import shutil
@@ -9,7 +10,6 @@ import sys
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
-import ecoshard
 import numpy
 import pandas
 import pygeoprocessing
@@ -51,6 +51,15 @@ logging.basicConfig(
     stream=sys.stdout)
 LOGGER = logging.getLogger(__name__)
 logging.getLogger('taskgraph').setLevel(logging.INFO)
+
+
+def mult_op(base_array, base_nodata, factor_array, target_nodata):
+    """Multipy base by a constant factor array."""
+    result = numpy.empty_like(base_array)
+    result[:] = target_nodata
+    valid_mask = ~numpy.isclose(base_array, base_nodata)
+    result[valid_mask] = base_array[valid_mask] * factor_array[valid_mask]
+    return result
 
 
 def gs_copy(uri_path, target_path):
@@ -234,10 +243,52 @@ def unzip(zipfile_path, target_dir):
         zip_ref.extractall(target_dir)
 
 
+def degrees_per_meter(max_lat, min_lat, n_pixels):
+    """Calculate degrees/meter for a range of latitudes.
+
+    Create a 1D array ranging from "max_lat" to "min_lat" where each element
+    contains an average degrees per meter that maps to that lat value.
+
+    Adapted from: https://gis.stackexchange.com/a/127327/2397
+
+    Args:
+        max_lat (float): max lat for first element
+        min_lat (float): min lat non-inclusive for last element
+        n_pixels (int): number of elements in target array
+
+    Returns:
+        Area of square pixel of side length `pixel_size_in_degrees` centered at
+        `center_lat` in m^2.
+
+    """
+    m1 = 111132.92
+    m2 = -559.82
+    m3 = 1.175
+    m4 = -0.0023
+    p1 = 111412.84
+    p2 = -93.5
+    p3 = 0.118
+
+    pixel_length_array = numpy.empty(n_pixels)
+    for index, lat_deg in enumerate(numpy.linspace(
+            max_lat, min_lat, num=n_pixels, endpoint=False)):
+        lat = lat_deg * numpy.pi / 180
+
+        lat_mpd = (
+            m1+(m2*numpy.cos(2*lat))+(m3*numpy.cos(4*lat)) +
+            (m4*numpy.cos(6*lat)))
+        lng_mpd = (
+            (p1*numpy.cos(lat))+(p2*numpy.cos(3*lat)) + (p3*numpy.cos(5*lat)))
+
+        pixel_length_array[index] = numpy.sqrt(lat_mpd*lng_mpd)
+
+    return pixel_length_array
+
+
 def main():
     """Entry point."""
-    dem_dir = os.path.join(CHURN_DIR, 'dem')
-    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, dem_dir]:
+    dem_zip_dir = os.path.join(CHURN_DIR, 'dem')
+    for dir_path in [WORKSPACE_DIR, ECOSHARD_DIR, CHURN_DIR, dem_zip_dir]:
         try:
             os.makedirs(dir_path)
         except OSError:
@@ -246,7 +297,6 @@ def main():
     task_graph = taskgraph.TaskGraph(
         WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
 
-    slope_raster_path = os.path.join(CHURN_DIR, 'slope.tif')
     stream_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_STREAMS_URI))
     base_lulc_raster_path = os.path.join(
@@ -256,6 +306,7 @@ def main():
 
     dem_zip_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_DEM_URI))
+    dem_dir_path = os.path.join(dem_zip_path, 'global_dem_3s')
 
     for raster_path, ecoshard_uri in [
             (stream_raster_path, GLOBAL_STREAMS_URI),
@@ -271,15 +322,50 @@ def main():
     task_graph.join()
 
     # extract dem:
-    task_graph.add_task(
+    unzip_dem_task = task_graph.add_task(
         func=unzip,
-        args=(dem_zip_path, dem_dir),
+        args=(dem_zip_path, dem_zip_dir),
         task_name='unzip dem')
 
-    task_graph.close()
-    task_graph.join()
+    # create VRT
+    dem_vrt_raster_path = os.path.join(dem_dir_path, 'dem.vrt')
+    build_vrt_task = task_graph.add_task(
+        func=gdal.BuildVRT,
+        args=(dem_vrt_raster_path, glob.glob(
+            os.path.join(dem_dir_path, '*.tif'))),
+        target_path_list=[dem_vrt_raster_path],
+        dependent_task_list=[unzip_dem_task],
+        task_name='build vrt')
 
-    return
+    build_vrt_task.join()
+    vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
+    vrt_bb = vrt_info['bounding_box']
+    n_cols, n_rows = vrt_info['raster_size']
+
+    # create meters to degree array
+    dpm_task = task_graph.add_task(
+        func=degrees_per_meter(vrt_bb[3], vrt_bb[1], n_rows),
+        task_name='degrees_per_meter array')
+
+    dem_in_degrees_raster_path = os.path.join(
+        CHURN_DIR, 'dem_in_degrees.tif')
+    dem_vrt_nodata = -9999
+    dem_to_degrees = task_graph.add_task(
+        func=pygeoprocessing.raster_calculator,
+        args=(
+            [(dem_vrt_raster_path, 1), (dem_vrt_nodata, 'raw'), dpm_task.get(),
+             (vrt_info['nodata'][0], 'raw')], mult_op,
+            dem_in_degrees_raster_path, vrt_info['datatype'], dem_vrt_nodata),
+        target_path_list=[dem_in_degrees_raster_path],
+        task_name='convert dem to degrees')
+
+    slope_raster_path = os.path.join(CHURN_DIR, 'slope.tif')
+    slope_task = task_graph.add_task(
+        fcun=pygeoprocessing.calculate_slope,
+        args=((dem_in_degrees_raster_path, 1), slope_raster_path),
+        dependent_task_list=[dem_to_degrees],
+        target_path_list=[slope_raster_path],
+        task_name='calc slope')
 
     slope_threshold_df = pandas.read_csv(SLOPE_THRESHOLD_PATH)
     slope_threshold_map = {
@@ -357,6 +443,7 @@ def main():
         args=(
             slope_raster_path, lulc_info['pixel_size'], max_slope_raster_path,
             'max'),
+        dependent_task_list=[slope_task],
         target_path_list=[max_slope_raster_path],
         task_name='max slope')
 
@@ -367,6 +454,7 @@ def main():
         args=(
             slope_raster_path, lulc_info['pixel_size'],
             average_slope_raster_path, 'average'),
+        dependent_task_list=[slope_task],
         target_path_list=[average_slope_raster_path],
         task_name='average slope')
 
@@ -376,7 +464,7 @@ def main():
     ag_expansion_slope_avg_exclusion_mask_path = os.path.join(
         WORKSPACE_DIR, 'ag_expansion_slope_avg_exclusion_mask.tif')
 
-    for slope_raster_path, target_raster_path in [
+    for _slope_raster_path, _target_raster_path in [
             (max_slope_raster_path,
              ag_expansion_slope_max_exclusion_mask_path),
             (average_slope_raster_path,
@@ -384,14 +472,14 @@ def main():
         task_graph.add_task(
             func=threshold_by_raster,
             args=(
-                slope_raster_path, slope_threshold_raster_path,
-                target_raster_path),
-            target_path_list=[target_raster_path],
+                _slope_raster_path, slope_threshold_raster_path,
+                _target_raster_path),
+            target_path_list=[_target_raster_path],
             dependent_task_list=[
                 rasterize_slope_threshold_task, max_slope_task,
                 average_slope_task],
             task_name=(
-                f'threshold raster {os.path.basename(target_raster_path)}'))
+                f'threshold raster {os.path.basename(_target_raster_path)}'))
 
     # use 10% slope cutoff
     ag_intensification_slope_max_exclusion_mask_path = os.path.join(
@@ -399,7 +487,7 @@ def main():
     ag_intensification_slope_avg_exclusion_mask_path = os.path.join(
         WORKSPACE_DIR, 'ag_intensification_slope_avg_exclusion_mask.tif')
 
-    for slope_raster_path, target_raster_path in [
+    for _slope_raster_path, target_raster_path in [
             (max_slope_raster_path,
              ag_intensification_slope_max_exclusion_mask_path),
             (average_slope_raster_path,
@@ -407,7 +495,7 @@ def main():
         task_graph.add_task(
             func=threshold_by_value,
             args=(
-                slope_raster_path, 10.0, target_raster_path),
+                _slope_raster_path, 10.0, target_raster_path),
             target_path_list=[target_raster_path],
             dependent_task_list=[max_slope_task, average_slope_task],
             task_name=(
