@@ -356,7 +356,7 @@ def main():
     pygeoprocessing.warp_raster(
         dem_vrt_raster_path, vrt_info['pixel_size'],
         clipped_vrt_raster_path, 'near', target_bb=[-122, 32, -130, 40],
-        nthreads=multiprocessing.cpu_count())
+        n_threads=multiprocessing.cpu_count())
     dem_vrt_raster_path = clipped_vrt_raster_path
 
     # create meters to degree array
