@@ -374,8 +374,8 @@ def main():
     dem_to_degrees = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
-            [(dem_vrt_raster_path, 1), (dem_vrt_nodata, 'raw'),
-             lng_m_to_d_array[:, None], (vrt_info['nodata'][0], 'raw')],
+            [(dem_vrt_raster_path, 1), (vrt_info['nodata'][0], 'raw'),
+             lng_m_to_d_array[:, None], (dem_vrt_nodata, 'raw')],
             mult_op, dem_in_degrees_raster_path, gdal.GDT_Float32,
             dem_vrt_nodata),
         target_path_list=[dem_in_degrees_raster_path],
