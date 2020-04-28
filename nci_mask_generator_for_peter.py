@@ -304,7 +304,7 @@ def main():
             pass
 
     task_graph = taskgraph.TaskGraph(
-        WORKSPACE_DIR, -1) #multiprocessing.cpu_count(), 5.0)
+        WORKSPACE_DIR, multiprocessing.cpu_count(), 5.0)
 
     stream_raster_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(GLOBAL_STREAMS_URI))
