@@ -335,6 +335,7 @@ def main():
         func=unzip,
         args=(dem_zip_path, dem_zip_dir),
         task_name='unzip dem')
+    unzip_dem_task.join()
 
     # create VRT
     dem_vrt_raster_path = os.path.join(dem_dir_path, 'dem.vrt')
