@@ -375,7 +375,7 @@ def main():
         args=(
             [(dem_vrt_raster_path, 1), (dem_vrt_nodata, 'raw'),
              lng_m_to_d_array[:, None], (vrt_info['nodata'][0], 'raw')],
-            mult_op, dem_in_degrees_raster_path, vrt_info['datatype'],
+            mult_op, dem_in_degrees_raster_path, gdal.GDT_Float32,
             dem_vrt_nodata),
         target_path_list=[dem_in_degrees_raster_path],
         task_name='convert dem to degrees')
