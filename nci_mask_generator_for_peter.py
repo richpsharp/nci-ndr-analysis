@@ -349,13 +349,13 @@ def main():
     build_vrt_task.join()
     vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
 
-    # do a clip first
-    clipped_vrt_raster_path = os.path.join(CHURN_DIR, 'clipped_dem.tif')
-    pygeoprocessing.warp_raster(
-        dem_vrt_raster_path, vrt_info['pixel_size'],
-        clipped_vrt_raster_path, 'near', target_bb=[-122, 32, -126, 36],
-        n_threads=multiprocessing.cpu_count())
-    dem_vrt_raster_path = clipped_vrt_raster_path
+    # this was for debugging: do a clip first
+    # clipped_vrt_raster_path = os.path.join(CHURN_DIR, 'clipped_dem.tif')
+    # pygeoprocessing.warp_raster(
+    #     dem_vrt_raster_path, vrt_info['pixel_size'],
+    #     clipped_vrt_raster_path, 'near', target_bb=[-122, 32, -126, 36],
+    #     n_threads=multiprocessing.cpu_count())
+    # dem_vrt_raster_path = clipped_vrt_raster_path
     vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
     vrt_bb = vrt_info['bounding_box']
     n_cols, n_rows = vrt_info['raster_size']
@@ -453,6 +453,7 @@ def main():
         args=(
             stream_raster_path, lulc_info['pixel_size'],
             low_res_stream_raster_path, 'max'),
+        kwargs={'n_threads': multiprocessing.cpu_count()//2},
         target_path_list=[low_res_stream_raster_path],
         task_name='low res stream')
 
@@ -463,6 +464,7 @@ def main():
         args=(
             slope_raster_path, lulc_info['pixel_size'], max_slope_raster_path,
             'max'),
+        kwargs={'n_threads': multiprocessing.cpu_count()//2},
         dependent_task_list=[slope_task],
         target_path_list=[max_slope_raster_path],
         task_name='max slope')
@@ -474,6 +476,7 @@ def main():
         args=(
             slope_raster_path, lulc_info['pixel_size'],
             average_slope_raster_path, 'average'),
+        kwargs={'n_threads': multiprocessing.cpu_count()//2},
         dependent_task_list=[slope_task],
         target_path_list=[average_slope_raster_path],
         task_name='average slope')
