@@ -64,7 +64,7 @@ def build_vrt(vrt_raster_path, raster_path_list):
 
 def mult_op(base_array, base_nodata, factor_array, target_nodata):
     """Multipy base by a constant factor array."""
-    result = numpy.empty_like(base_array)
+    result = numpy.empty(base_array.shape, dtype=numpy.float32)
     result[:] = target_nodata
     valid_mask = ~numpy.isclose(base_array, base_nodata)
     result[valid_mask] = base_array[valid_mask] * factor_array[valid_mask]
