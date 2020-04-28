@@ -348,8 +348,6 @@ def main():
 
     build_vrt_task.join()
     vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
-    vrt_bb = vrt_info['bounding_box']
-    n_cols, n_rows = vrt_info['raster_size']
 
     # do a clip first
     clipped_vrt_raster_path = os.path.join(CHURN_DIR, 'clipped_dem.tif')
@@ -359,6 +357,8 @@ def main():
         n_threads=multiprocessing.cpu_count())
     dem_vrt_raster_path = clipped_vrt_raster_path
     vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
+    vrt_bb = vrt_info['bounding_box']
+    n_cols, n_rows = vrt_info['raster_size']
 
     # create meters to degree array
     dpm_task = task_graph.add_task(
@@ -379,7 +379,6 @@ def main():
             dem_vrt_nodata),
         target_path_list=[dem_in_degrees_raster_path],
         task_name='convert dem to degrees')
-
 
     slope_raster_path = os.path.join(CHURN_DIR, 'slope.tif')
     slope_task = task_graph.add_task(
