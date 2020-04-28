@@ -358,6 +358,7 @@ def main():
         clipped_vrt_raster_path, 'near', target_bb=[-122, 32, -130, 40],
         n_threads=multiprocessing.cpu_count())
     dem_vrt_raster_path = clipped_vrt_raster_path
+    vrt_info = pygeoprocessing.get_raster_info(dem_vrt_raster_path)
 
     # create meters to degree array
     dpm_task = task_graph.add_task(
