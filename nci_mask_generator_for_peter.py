@@ -371,6 +371,7 @@ def main():
     dem_vrt_nodata = -9999
     lng_m_to_d_array = dpm_task.get()
     LOGGER.debug(lng_m_to_d_array)
+    LOGGER.debug(vrt_info['nodata'])
     dem_to_degrees = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
