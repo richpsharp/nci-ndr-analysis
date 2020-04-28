@@ -278,7 +278,7 @@ def degrees_per_meter(max_lat, min_lat, n_pixels):
     p2 = -93.5
     p3 = 0.118
 
-    pixel_length_array = numpy.empty(n_pixels)
+    meters_per_degree = numpy.empty(n_pixels)
     for index, lat_deg in enumerate(numpy.linspace(
             max_lat, min_lat, num=n_pixels, endpoint=False)):
         lat = lat_deg * numpy.pi / 180
@@ -289,9 +289,9 @@ def degrees_per_meter(max_lat, min_lat, n_pixels):
         lng_mpd = (
             (p1*numpy.cos(lat))+(p2*numpy.cos(3*lat)) + (p3*numpy.cos(5*lat)))
 
-        pixel_length_array[index] = numpy.sqrt(lat_mpd*lng_mpd)
+        meters_per_degree[index] = numpy.sqrt(lat_mpd*lng_mpd)
 
-    return pixel_length_array
+    return 1./meters_per_degree
 
 
 def main():
@@ -370,6 +370,7 @@ def main():
         CHURN_DIR, 'dem_in_degrees.tif')
     dem_vrt_nodata = -9999
     lng_m_to_d_array = dpm_task.get()
+    LOGGER.debug(lng_m_to_d_array)
     dem_to_degrees = task_graph.add_task(
         func=pygeoprocessing.raster_calculator,
         args=(
