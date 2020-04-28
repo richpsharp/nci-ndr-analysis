@@ -355,7 +355,7 @@ def main():
     clipped_vrt_raster_path = os.path.join(CHURN_DIR, 'clipped_dem.tif')
     pygeoprocessing.warp_raster(
         dem_vrt_raster_path, vrt_info['pixel_size'],
-        clipped_vrt_raster_path, 'nearest', target_bb=[-122, 32, 128, 40])
+        clipped_vrt_raster_path, 'near', target_bb=[-122, 32, 128, 40])
     dem_vrt_raster_path = clipped_vrt_raster_path
 
     # create meters to degree array
