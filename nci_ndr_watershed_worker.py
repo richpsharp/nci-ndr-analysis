@@ -52,44 +52,59 @@ PRECIP_URL = (
     'worldclim_2015_md5_16356b3770460a390de7e761a27dbfa1.tif')
 
 SCENARIO_ID_LULC_FERT_URL_PAIRS = [
-    ('baseline_potter',
-     'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
-     'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
-     'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
-    ('baseline_napp_rate',
-     'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
-     'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
-     'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
-    ('ag_expansion',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'scenarios_intensified_ag_irrigated_'
-     'md5_f954fdd1729718beda90d8ab8182b17c.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
-    ('ag_intensification',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'scenarios_intensified_ag_irrigated_'
-     'md5_f954fdd1729718beda90d8ab8182b17c.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'Intensified_NitrogenApplication_Rate_'
-     'md5_7639f5b9604da28e683bfc138239df66.tif'),
-    ('restoration_potter',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'scenarios_restoration_to_natural_'
-     'md5_345f7f9ee88e53d1c4250e7c3c6ddcf1.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
-    ('restoration_napp_rate',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'scenarios_restoration_to_natural_'
-     'md5_345f7f9ee88e53d1c4250e7c3c6ddcf1.tif',
-     'https://storage.googleapis.com/nci-ecoshards/'
-     'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif')
-    ]
+    ('extensification_bmps_irrigated', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/extensification_bmps_irrigated_md5_7f5928ea3dcbcc55b0df1d47fbeec312.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_irrigated_max_Model_and_observedNappRevB_BMPs_md5_ddc000f7ce7c0773039977319bcfcf5d.tif'),
+    ('extensification_bmps_rainfed', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/extensification_bmps_rainfed_md5_5350b6acebbff75bb71f27830098989f.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_rainfed_max_Model_and_observedNappRevB_BMPs_md5_fa2684c632ec2d0e0afb455b41b5d2a6.tif'),
+    ('extensification_current_practices', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/extensification_current_practices_md5_cbe24876a57999e657b885cf58c4981a.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/ExtensificationNapp_allcrops_rainfedfootprint_gapfilled_observedNappRevB_md5_1185e457751b672c67cc8c6bf7016d03.tif'),
+    ('extensification_intensified_irrigated', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/extensification_intensified_irrigated_md5_215fe051b6bc84d3e15a4d1661b6b936.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_irrigated_max_Model_and_observedNappRevB_md5_9331ed220772b21f4a2c81dd7a2d7e10.tif'),
+    ('extensification_intensified_rainfed', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/extensification_intensified_rainfed_md5_47050c834831a6bc4644060fffffb052.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_rainfed_max_Model_and_observedNappRevB_md5_1df3d8463641ffc6b9321e73973f3444.tif'),
+    ('fixedarea_currentpractices', 'gs://ipbes-ndr-ecoshard-data/ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_md5_1254d25f937e6d9bdee5779d377c5aa4.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/ExtensificationNapp_allcrops_rainfedfootprint_gapfilled_observedNappRevB_md5_1185e457751b672c67cc8c6bf7016d03.tif'),
+    ('fixedarea_bmps_irrigated', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/fixedarea_bmps_irrigated_md5_857517cbef7f21cd50f963b4fc9e7191.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_irrigated_max_Model_and_observedNappRevB_BMPs_md5_ddc000f7ce7c0773039977319bcfcf5d.tif'),
+    ('fixedarea_bmps_rainfed', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/fixedarea_bmps_rainfed_md5_3b220e236c818a28bd3f2f5eddcc48b0.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_rainfed_max_Model_and_observedNappRevB_BMPs_md5_fa2684c632ec2d0e0afb455b41b5d2a6.tif'),
+    ('fixedarea_intensified_irrigated', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/fixedarea_intensified_irrigated_md5_4990faf720ac68f95004635e4a2c3c74.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_irrigated_max_Model_and_observedNappRevB_md5_9331ed220772b21f4a2c81dd7a2d7e10.tif'),
+    ('fixedarea_intensified_rainfed', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/fixedarea_intensified_rainfed_md5_98ac886076a35507c962263ee6733581.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/IntensificationNapp_allcrops_rainfed_max_Model_and_observedNappRevB_md5_1df3d8463641ffc6b9321e73973f3444.tif'),
+    ('global_potential_vegetation', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/global_potential_vegetation_md5_61ee1f0ffe1b6eb6f2505845f333cf30.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/ExtensificationNapp_allcrops_rainfedfootprint_gapfilled_observedNappRevB_md5_1185e457751b672c67cc8c6bf7016d03.tif'),
+]
+
+# The following was pre "we need to re-run everything with new maps"
+# SCENARIO_ID_LULC_FERT_URL_PAIRS = [
+#     ('baseline_potter',
+#      'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
+#      'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
+#      'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
+#     ('baseline_napp_rate',
+#      'https://storage.googleapis.com/critical-natural-capital-ecoshards/'
+#      'ESACCI-LC-L4-LCCS-Map-300m-P1Y-2015-v2.0.7_'
+#      'md5_1254d25f937e6d9bdee5779d377c5aa4.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
+#     ('ag_expansion',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'scenarios_intensified_ag_irrigated_'
+#      'md5_f954fdd1729718beda90d8ab8182b17c.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif'),
+#     ('ag_intensification',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'scenarios_intensified_ag_irrigated_'
+#      'md5_f954fdd1729718beda90d8ab8182b17c.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'Intensified_NitrogenApplication_Rate_'
+#      'md5_7639f5b9604da28e683bfc138239df66.tif'),
+#     ('restoration_potter',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'scenarios_restoration_to_natural_'
+#      'md5_345f7f9ee88e53d1c4250e7c3c6ddcf1.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'nfertilizer_global_Potter_md5_88dae2a76a120dedeab153a334f929cc.tif'),
+#     ('restoration_napp_rate',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'scenarios_restoration_to_natural_'
+#      'md5_345f7f9ee88e53d1c4250e7c3c6ddcf1.tif',
+#      'https://storage.googleapis.com/nci-ecoshards/'
+#      'NitrogenApplication_Rate_md5_caee837fa0e881be0c36c1eba1dea44e.tif')
+#     ]
 
 BIOPHYSICAL_URL = (
     'https://storage.googleapis.com/nci-ecoshards/'
@@ -410,10 +425,11 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
     Runs NDR with the given watershed/fid and uses data previously synchronized
     when the module started.
 
-    Paramters:
+    Args:
         work_queue (queue): gets tuples of
             (watershed_basename, watershed_fid, callback_url,
              session_id)
+
     Returns:
         None.
 
