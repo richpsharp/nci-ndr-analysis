@@ -232,19 +232,20 @@ def processing_status():
         active_count, ready_count = (
             GLOBAL_WORKER_STATE_SET.get_counts())
 
+        LOGGER.debug('%s' % str(
+            100.0*stitched_count/total_count,
+            stitched_count,
+            total_count,
+            total_count-stitched_count,
+            active_count, ready_count))
+
         uptime = time.time() - START_TIME
         hours = uptime // 3600
         minutes = (uptime - hours*3600) // 60
         seconds = uptime % 60
         uptime_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
-        LOGGER.debug('%s' % str(
-            100.0*stitched_count/total_count,
-            stitched_count,
-            total_count,
-            total_count-stitched_count,
-            uptime_str,
-            active_count, ready_count))
+        LOGGER.debug(uptime_str)
         result_string = (
             'percent stitched: %.2f%% (%d)<br>'
             'total to stitch: %d<br>'
