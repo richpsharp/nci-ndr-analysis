@@ -238,6 +238,13 @@ def processing_status():
         seconds = uptime % 60
         uptime_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
+        LOGGER.debug('%s' % str(
+            100.0*stitched_count/total_count,
+            stitched_count,
+            total_count,
+            total_count-stitched_count,
+            uptime_str,
+            active_count, ready_count))
         result_string = (
             'percent stitched: %.2f%% (%d)<br>'
             'total to stitch: %d<br>'
