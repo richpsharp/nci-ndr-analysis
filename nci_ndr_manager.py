@@ -438,14 +438,14 @@ def processing_status():
                 active_count, ready_count)))
 
         result_string = (
-            'percent complete: %.2f%% (%d)<br>'
-            'total to process: %d<br>'
-            'total left to process: %d<br>'
+            'percent complete: %.2f%% (%s)<br>'
+            'total to process: %s<br>'
+            'total left to process: %s<br>'
             'approx time left: %s<br>'
             'processing %.2f watersheds every second<br>'
             'uptime: %s<br>'
-            'active workers: %d<br>'
-            'ready workers: %d<br>' % (
+            'active workers: %s<br>'
+            'ready workers: %s<br>' % (
                 processed_count/total_count*100, processed_count,
                 total_count, total_count - processed_count,
                 stitched_count/total_count*100, stitched_count,
