@@ -386,7 +386,7 @@ def single_run_ndr(
             "%s/%s/%s" %
             (bucket_uri_prefix, scenario_id, os.path.basename(zipfile_path)))
         subprocess.run(
-            ["/usr/local/bin/aws2 s3 cp %s %s" % (
+            ["/usr/local/bin/aws s3 cp %s %s" % (
                 zipfile_path, zipfile_s3_uri)], shell=True,
             check=True)
         shutil.rmtree(args['workspace_dir'])

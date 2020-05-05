@@ -683,7 +683,7 @@ def new_host_monitor():
     while True:
         try:
             raw_output = subprocess.check_output(
-                'aws2 ec2 describe-instances', shell=True)
+                'aws ec2 describe-instances', shell=True)
             out_json = json.loads(raw_output)
             working_host_set = set()
             for reservation in out_json['Reservations']:
