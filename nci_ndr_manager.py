@@ -37,8 +37,22 @@ import taskgraph
 gdal.SetCacheMax(2**29)
 
 SCENARIO_ID_LIST = [
-    'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
-    'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
+    'extensification_bmps_irrigated'
+    'extensification_bmps_rainfed'
+    'extensification_current_practices'
+    'extensification_intensified_irrigated'
+    'extensification_intensified_rainfed'
+    'fixedarea_currentpractices'
+    'fixedarea_bmps_irrigated'
+    'fixedarea_bmps_rainfed'
+    'fixedarea_intensified_irrigated'
+    'fixedarea_intensified_rainfed'
+    'global_potential_vegetation']
+
+# This is old from pre "we need to rerun everything"
+# SCENARIO_ID_LIST = [
+#     'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
+#     'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
