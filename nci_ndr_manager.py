@@ -429,13 +429,13 @@ def processing_status():
         approx_time_left_str = '%dh:%.2dm:%2.ds' % (
             hours, minutes, seconds)
         LOGGER.debug('vars: %s' % str(
-            processed_count/total_count*100, processed_count,
-            total_count, total_count - processed_count,
-            stitched_count/total_count*100, stitched_count,
-            approx_time_left_str,
-            processing_rate,
-            uptime_str,
-            active_count, ready_count))
+            (processed_count/total_count*100, processed_count,
+                total_count, total_count - processed_count,
+                stitched_count/total_count*100, stitched_count,
+                approx_time_left_str,
+                processing_rate,
+                uptime_str,
+                active_count, ready_count)))
 
         result_string = (
             'percent complete: %.2f%% (%d)<br>'
