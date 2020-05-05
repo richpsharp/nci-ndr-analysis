@@ -266,7 +266,20 @@ def processing_status():
 
 GLOBAL_STATUS = {}
 SCENARIO_ID_LIST = [
-    'baseline_potter']
+    'extensification_bmps_irrigated'
+    'extensification_bmps_rainfed'
+    'extensification_current_practices'
+    'extensification_intensified_irrigated'
+    'extensification_intensified_rainfed'
+    'fixedarea_currentpractices'
+    'fixedarea_bmps_irrigated'
+    'fixedarea_bmps_rainfed'
+    'fixedarea_intensified_irrigated'
+    'fixedarea_intensified_rainfed'
+    'global_potential_vegetation']
+
+# SCENARIO_ID_LIST = [
+#     'baseline_potter']
     # 'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
     # 'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
 
