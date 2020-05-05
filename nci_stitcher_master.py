@@ -278,18 +278,13 @@ SCENARIO_ID_LIST = [
     'fixedarea_intensified_rainfed'
     'global_potential_vegetation']
 
-# SCENARIO_ID_LIST = [
-#     'baseline_potter']
-    # 'baseline_potter', 'baseline_napp_rate', 'ag_expansion',
-    # 'ag_intensification', 'restoration_potter', 'restoration_napp_rate']
-
 GLOBAL_STITCH_MAP = {
-    'stream': (
-        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
-        gdal.GDT_Byte, 255),
-    # 'n_export': (
-    #     'workspace_worker/[BASENAME]_[FID]/n_export.tif',
-    #     gdal.GDT_Float32, -1),
+    # 'stream': (
+    #     'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
+    #     gdal.GDT_Byte, 255),
+    'n_export': (
+        'workspace_worker/[BASENAME]_[FID]/n_export.tif',
+        gdal.GDT_Float32, -1),
     # 'modified_load_n': (
     #     'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/'
     #     'modified_load_n.tif',
