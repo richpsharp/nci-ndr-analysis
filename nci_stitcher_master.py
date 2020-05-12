@@ -232,12 +232,10 @@ def processing_status():
         active_count, ready_count = (
             GLOBAL_WORKER_STATE_SET.get_counts())
 
-        LOGGER.debug('%s' % str(
-            100.0*stitched_count/total_count,
-            stitched_count,
-            total_count,
-            total_count-stitched_count,
-            active_count, ready_count))
+        LOGGER.debug(
+            f'{100.0*stitched_count/total_count},'
+            f'{stitched_count}, {total_count}, {total_count-stitched_count}, '
+            f'{active_count}, {ready_count}')
 
         uptime = time.time() - START_TIME
         hours = uptime // 3600
