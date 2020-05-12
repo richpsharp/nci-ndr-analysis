@@ -274,17 +274,17 @@ def processing_status():
 
 GLOBAL_STATUS = {}
 SCENARIO_ID_LIST = [
-    'extensification_bmps_irrigated'
-    'extensification_bmps_rainfed'
-    'extensification_current_practices'
-    'extensification_intensified_irrigated'
-    'extensification_intensified_rainfed'
-    'fixedarea_currentpractices'
-    'fixedarea_bmps_irrigated'
-    'fixedarea_bmps_rainfed'
-    'fixedarea_intensified_irrigated'
-    'fixedarea_intensified_rainfed'
-    'global_potential_vegetation']
+    'extensification_bmps_irrigated',
+    'extensification_bmps_rainfed',
+    'extensification_current_practices',
+    'extensification_intensified_irrigated',
+    'extensification_intensified_rainfed',
+    'fixedarea_currentpractices',
+    'fixedarea_bmps_irrigated',
+    'fixedarea_bmps_rainfed',
+    'fixedarea_intensified_irrigated',
+    'fixedarea_intensified_rainfed',
+    'global_potential_vegetation',]
 
 GLOBAL_STITCH_MAP = {
     # 'stream': (
