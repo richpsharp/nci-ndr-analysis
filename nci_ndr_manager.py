@@ -613,7 +613,7 @@ def reschedule_worker():
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
-def send_job(watershed_fid_tuple_list):
+def send_job(watershed_fid_tuple_list, scenario_id):
     """Send watershed/fid to the global execution pool.
 
     Parameters:
@@ -637,6 +637,7 @@ def send_job(watershed_fid_tuple_list):
         LOGGER.debug('this is the session id: %s', session_id)
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
+            'scenario_id': scenario_id,
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
             'session_id': session_id,

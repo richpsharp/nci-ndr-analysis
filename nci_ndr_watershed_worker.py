@@ -65,6 +65,9 @@ SCENARIO_ID_LULC_FERT_URL_PAIRS = [
     ('global_potential_vegetation', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/global_potential_vegetation_md5_61ee1f0ffe1b6eb6f2505845f333cf30.tif', 'https://storage.googleapis.com/nci-ecoshards/scenarios050420/ExtensificationNapp_allcrops_rainfedfootprint_gapfilled_observedNappRevB_md5_1185e457751b672c67cc8c6bf7016d03.tif'),
 ]
 
+# Prebuild this so we can check if scenarios are valid
+SCENARIO_ID_SET = {x[0] for x in SCENARIO_ID_LULC_FERT_URL_PAIRS}
+
 # The following was pre "we need to re-run everything with new maps"
 # SCENARIO_ID_LULC_FERT_URL_PAIRS = [
 #     ('baseline_potter',
@@ -218,15 +221,14 @@ def run_ndr():
     """Create a new NDR calculation job w/ the given arguments.
 
     Parameters expected in post data:
-        watershed_path (str): relative path to global watershed shapefile.
-            This is defined across docker images and so the server and
-            workers will have the same relative path.
-        fid (int): this is the FID in the `watershed_path` vector that
-            corresponds to the watershed to process.
+        watershed_fid_tuple_list (list): list of watershed FIDs with
+            'watershed_basename', 'watershed_fid', 'watershed_area',
+            and 'scenario_id'
         callback_url (str): this is the url to use to POST to when the
             watershed is complete. The body of the post will contain the
             url to the bucket OR the traceback of the exception that
             occured.
+        bucket_uri_prefix (str): prefix to the URI bucket to copy results to.
 
     Returns:
         (status_url, 201) if successful. `status_url` can be GET to monitor
@@ -267,15 +269,25 @@ def get_status(session_id):
 
 
 def ndr_single_worker(joinable_work_queue, error_queue):
-    """Monitor joinable work queue and call single run as needed."""
+    """Monitor joinable work queue and call single run as needed.
+
+    Args:
+        joinable_work_queue (Queue): contains watershed basename, FID,
+            scenario id, and bucket URI prefix tuples.
+        error_queue (Queue): if any errors occur on this run they will be put
+            into this queue.
+
+    Returns:
+        None.
+
+    """
     while True:
         try:
-            watershed_basename, watershed_fid, bucket_uri_prefix = (
-                joinable_work_queue.get())
-            for scenario_id in [x[0] for x in SCENARIO_ID_LULC_FERT_URL_PAIRS]:
-                single_run_ndr(
-                    watershed_basename, watershed_fid, bucket_uri_prefix,
-                    scenario_id, error_queue)
+            (watershed_basename, watershed_fid, scenario_id,
+                bucket_uri_prefix) = joinable_work_queue.get()
+            single_run_ndr(
+                watershed_basename, watershed_fid, bucket_uri_prefix,
+                scenario_id, error_queue)
         except Exception:
             LOGGER.exception('exception in ndr worker')
             error_queue.put(traceback.format_exc())
@@ -427,8 +439,7 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
 
     Args:
         work_queue (queue): gets tuples of
-            (watershed_basename, watershed_fid, callback_url,
-             session_id)
+            (watershed_basename, watershed_fid, watershed_area, scenario_id)
 
     Returns:
         None.
@@ -444,21 +455,24 @@ def ndr_worker(work_queue, single_run_joinable_queue, error_queue):
             watershed_fid_url_json_list = []
             start_time = time.time()
             total_area = 0.0
-            for watershed_basename, watershed_fid, watershed_area in (
-                    watershed_fid_tuple_list):
+            for (watershed_basename, watershed_fid, watershed_area,
+                 scenario_id) in watershed_fid_tuple_list:
+                # send job to worker
+                if scenario_id not in SCENARIO_ID_SET:
+                    raise ValueError(f"unknown scenario {scenario_id}")
+
                 single_run_joinable_queue.put(
-                    (watershed_basename, watershed_fid, bucket_uri_prefix))
+                    (watershed_basename, watershed_fid, scenario_id,
+                     bucket_uri_prefix))
                 total_area += watershed_area
-                watershed_url_map = {}
-                for scenario_id, _, _ in SCENARIO_ID_LULC_FERT_URL_PAIRS:
-                    zipfile_url = (
-                        'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
-                        'ndr_scenarios/%s/%s_%d.zip' % (
-                            scenario_id, watershed_basename, watershed_fid))
-                    watershed_url_map[scenario_id] = zipfile_url
+                zipfile_url = (
+                    'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
+                    'ndr_scenarios/%s/%s_%d.zip' % (
+                        scenario_id, watershed_basename, watershed_fid))
                 watershed_fid_url_json_list.append(
-                    (watershed_basename, watershed_fid,
-                     json.dumps(watershed_url_map)))
+                    (watershed_basename, watershed_fid, scenario_id,
+                     zipfile_url))
+            # wait until workers done
             single_run_joinable_queue.join()
             error_message = ''
             while True:
