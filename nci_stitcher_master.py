@@ -179,7 +179,7 @@ def new_host_monitor(reschedule_queue, worker_list=None):
     while True:
         try:
             raw_output = subprocess.check_output(
-                'aws2 ec2 describe-instances', shell=True)
+                'aws ec2 describe-instances', shell=True)
             out_json = json.loads(raw_output)
             working_host_set = set()
             for reservation in out_json['Reservations']:
@@ -498,7 +498,7 @@ def global_stitcher(result_queue):
             local_tile_raster_path = os.path.join(
                 TILE_DIR, os.path.basename(geotiff_s3_uri))
             subprocess.run(
-                ["/usr/local/bin/aws2 s3 cp %s %s" % (
+                ["/usr/local/bin/aws s3 cp %s %s" % (
                     geotiff_s3_uri, local_tile_raster_path)], shell=True,
                 check=True)
             raster_id = payload['raster_id']
