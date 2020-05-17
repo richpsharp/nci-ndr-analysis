@@ -412,7 +412,7 @@ def schedule_worker(
                 watershed_vector = gdal.OpenEx(
                     WATERSHED_PATH_MAP[watershed_basename], gdal.OF_VECTOR)
                 watershed_layer = watershed_vector.GetLayer()
-                watershed_feature = watershed_layer.GetFeature(fid)
+                watershed_feature = watershed_layer.GetFeature(int(fid))
                 lng_min, lat_min, lng_max, lat_max = shapely.wkt.loads(
                     watershed_feature.GetGeometryRef().ExportToWkt()).bounds
                 watershed_vector = None
