@@ -316,7 +316,7 @@ def create_status_database(
         INSERT INTO job_status(
         watershed_basename, fid, watershed_area_deg, scenario_id, job_status,
         country_list, workspace_urls_json)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ''')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
