@@ -552,12 +552,16 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
         else:
             # hard-coding a 1.0 because we don't really know how big the
             # watershed is if it's passed as an immediate.
-            payload_list = [
-                re.match('(.*)_(\d+)', x).groups() + (1.0, )
-                for x in immediate_watershed_fid_list]
+            payload_list = []
+            for immediate in immediate_watershed_fid_list:
+                (watershed_basename, fid, scenario_id) = re.match(
+                    '(.*)_(\d+)_(.*)', immediate).groups()
+                payload_list.append(
+                    (watershed_basename, fid, 1.0, scenario_id))
             LOGGER.debug(
                 'running in immediate mode for these watersheds: %s',
                 payload_list)
+            sys.exit()
 
         watershed_fid_tuple_list = []
         total_expected_runtime = 0.0
@@ -805,8 +809,10 @@ def download_url(source_url, target_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
-        '--watershed_fid_immedates', type=str, nargs='+', default=None,
-        help='list of `watershed_fid` identifiers to run instead of database')
+        '--watershed_fid_scenario_immedates', type=str, nargs='+',
+        default=None, help=(
+            'list of `(watershed)_(fid)_(scenario_id)` identifiers to run '
+            'instead of database'))
     parser.add_argument(
         '--app_port', type=int, default=8080,
         help='port to listen on for callback complete')
