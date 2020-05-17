@@ -22,6 +22,7 @@ import sys
 import threading
 import time
 import uuid
+import zipfile
 
 from osgeo import gdal
 from osgeo import osr
@@ -214,6 +215,14 @@ def new_host_monitor(reschedule_queue, worker_list=None):
             time.sleep(DETECTOR_POLL_TIME)
         except Exception:
             LOGGER.exception('exception in `new_host_monitor`')
+
+
+def unzip_file(zip_path, target_directory, token_file):
+    """Unzip contents of `zip_path` into `target_directory`."""
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(target_directory)
+    with open(token_file, 'w') as token_file:
+        token_file.write(str(datetime.datetime.now()))
 
 
 @APP.route('/api/v1/processing_status', methods=['GET'])
@@ -778,14 +787,26 @@ if __name__ == '__main__':
         ignore_path_list=[STATUS_DATABASE_PATH],
         task_name='create status database')
 
+    LOGGER.debug(
+        'scheduling download of watersheds: %s', WATERSHEDS_URL)
+
     watersheds_zip_path = os.path.join(
         ECOSHARD_DIR, os.path.basename(WATERSHEDS_URL))
-    LOGGER.debug(
-        'scheduing download of watersheds: %s', WATERSHEDS_URL)
-    watersheds_zip_fetch_task = task_graph.add_task(
-        func=ecoshard.download_and_unzip,
+    download_watersheds_task = task_graph.add_task(
+        func=ecoshard.download_url,
         args=(WATERSHEDS_URL, ECOSHARD_DIR),
-        task_name='download and unzip watersheds')
+        target_path_list=[watersheds_zip_path],
+        task_name='download %s' % WATERSHEDS_URL)
+
+    unzip_token_path = os.path.join(CHURN_DIR, 'unzipped.watersheds')
+    unzip_watersheds_task = task_graph.add_task(
+        func=unzip_file,
+        args=(watersheds_zip_path, ECOSHARD_DIR, unzip_token_path),
+        target_path_list=[unzip_token_path],
+        dependent_task_list=[download_watersheds_task],
+        task_name='unzip watersheds')
+
+    unzip_watersheds_task.join()
 
     global WATERSHED_PATH_MAP
     WATERSHED_PATH_MAP = {}
