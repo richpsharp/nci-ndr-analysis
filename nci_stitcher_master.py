@@ -435,7 +435,6 @@ def schedule_worker(
             payload_list = list(grid_set)
             LOGGER.debug(f'immediate payload list: {str(payload_list)}')
             LOGGER.debug(f'that is {len(payload_list)} elements')
-        return
 
         connection.commit()
         connection.close()
