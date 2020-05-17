@@ -8,10 +8,11 @@ https://docs.google.com/document/d/
 """
 import argparse
 import datetime
+import glob
 import json
 import logging
-import os
 import multiprocessing
+import os
 import pathlib
 import queue
 import re
@@ -24,15 +25,16 @@ import uuid
 
 from osgeo import gdal
 from osgeo import osr
+import ecoshard
 import flask
 import numpy
 import pygeoprocessing
 import requests
 import retrying
+import shapely
 import taskgraph
 
 gdal.SetCacheMax(2**29)
-
 
 WATERSHEDS_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/'
@@ -360,7 +362,7 @@ def create_status_database(database_path, complete_token_path):
 
 def schedule_worker(
         global_lng_min, global_lat_min, global_lng_max, global_lat_max,
-        watershed_fid_scenario_immedates):
+        watershed_fid_scenario_immediates):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
     Args:
@@ -368,7 +370,7 @@ def schedule_worker(
         global_lat_min (float): min lat value to process region (for debugging)
         global_lng_max (float): max lng value to process region (for debugging)
         global_lat_max (float): max lat value to process region (for debugging)
-        watershed_fid_scenario_immedates (list): if not None, a list of
+        watershed_fid_scenario_immediates (list): if not None, a list of
             [watershed_base]_[fid]_[scenario_id] to stitch no matter what the
             status database is.
 
@@ -384,7 +386,7 @@ def schedule_worker(
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
-        if not watershed_fid_scenario_immedates:
+        if not watershed_fid_scenario_immediates:
             cursor.execute(
                 'SELECT grid_id, scenario_id, raster_id, '
                 'lng_min, lat_min, lng_max, lat_max '
@@ -393,9 +395,32 @@ def schedule_worker(
                 (global_lng_min, global_lat_min, global_lng_max, global_lat_max))
             payload_list = list(cursor.fetchall())
         else:
-            for immediate in watershed_fid_scenario_immedates:
+            grid_set = set()
+            for immediate in watershed_fid_scenario_immediates:
                 (watershed_basename, fid, scenario_id) = re.match(
                     '(.*)_(\d+)_(.*)', immediate).groups()
+                # get the lat/lng bounds of the watershed
+                watershed_vector = WATERSHED_PATH_MAP[watershed_basename]
+                watershed_layer = watershed_vector.GetLayer()
+                watershed_feature = watershed_layer.GetFeature(fid)
+                lng_min, lat_mi, lng_max, lat_max = shapely.wkt.loads(
+                    watershed_feature.GetGeometryRef().ExportToWkt()).bounds
+                watershed_vector = None
+                watershed_layer = None
+                watershed_feature = None
+                cursor.execute(
+                    '''
+                    SELECT grid_id, scenario_id, raster_id,
+                    lng_min, lat_min, lng_max, lat_max
+                    FROM job_status
+                    WHERE
+                        lng_min >= ? AND lat_min >= ? AND
+                        lng_max <= ? AND lat_max <= ?
+                    ''', (lng_min, lat_mi, lng_max, lat_max))
+                # Put this in a set just in case some of the requests overlap
+                grid_set.extend(list(cursor.fetchall()))
+            payload_list = list(grid_set)
+
         connection.commit()
         connection.close()
 
@@ -726,7 +751,7 @@ if __name__ == '__main__':
             -181, -91, 181, 91),
         help="[lng_min, lat_min, lng_max, lat_max] global bounds.")
     parser.add_argument(
-        '--watershed_fid_scenario_immedates', type=str, nargs='+',
+        '--watershed_fid_scenario_immediates', type=str, nargs='+',
         default=None, help=(
             'list of `(watershed)_(fid)_(scenario_id)` identifiers to run '
             'instead of database'))
@@ -747,6 +772,23 @@ if __name__ == '__main__':
         target_path_list=[DATABASE_TOKEN_PATH],
         ignore_path_list=[STATUS_DATABASE_PATH],
         task_name='create status database')
+
+    watersheds_zip_path = os.path.join(
+        ECOSHARD_DIR, os.path.basename(WATERSHEDS_URL))
+    LOGGER.debug(
+        'scheduing download of watersheds: %s', WATERSHEDS_URL)
+    watersheds_zip_fetch_task = task_graph.add_task(
+        func=ecoshard.download_and_unzip,
+        args=(WATERSHEDS_URL, ECOSHARD_DIR),
+        task_name='download and unzip watersheds')
+
+    global WATERSHED_PATH_MAP
+    WATERSHED_PATH_MAP = {}
+    for watershed_path in glob.glob(os.path.join(
+            ECOSHARD_DIR, 'watersheds_globe_HydroSHEDS_15arcseconds',
+            '*.shp')):
+        watershed_id = os.path.basename(os.path.splitext(watershed_path)[0])
+        WATERSHED_PATH_MAP[watershed_id] = watershed_path
 
     GLOBAL_STITCH_PATH_MAP = {}
     for scenario_id in SCENARIO_ID_LIST:
@@ -796,7 +838,7 @@ if __name__ == '__main__':
     scheduling_thread = threading.Thread(
         target=schedule_worker,
         args=(
-            *args.global_bounding_box, args.watershed_fid_scenario_immedates))
+            *args.global_bounding_box, args.watershed_fid_scenario_immediates))
     scheduling_thread.start()
 
     reschedule_worker_thread = threading.Thread(

@@ -808,7 +808,7 @@ def download_url(source_url, target_path):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='NCI NDR Analysis.')
     parser.add_argument(
-        '--watershed_fid_scenario_immedates', type=str, nargs='+',
+        '--watershed_fid_scenario_immediates', type=str, nargs='+',
         default=None, help=(
             'list of `(watershed)_(fid)_(scenario_id)` identifiers to run '
             'instead of database'))
@@ -836,7 +836,8 @@ if __name__ == '__main__':
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
         args=(
-            args.watershed_fid_scenario_immedates, args.max_to_send_to_worker))
+            args.watershed_fid_scenario_immediates,
+            args.max_to_send_to_worker))
     schedule_worker_thread.start()
 
     new_host_monitor_thread = threading.Thread(
