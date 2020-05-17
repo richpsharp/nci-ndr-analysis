@@ -32,7 +32,7 @@ import numpy
 import pygeoprocessing
 import requests
 import retrying
-import shapely
+import shapely.wkt
 import taskgraph
 
 gdal.SetCacheMax(2**29)
