@@ -422,6 +422,7 @@ def schedule_worker(
                 # Put this in a set just in case some of the requests overlap
                 grid_set.extend(list(cursor.fetchall()))
             payload_list = list(grid_set)
+            LOGGER.debug(f'immediate payload list: {str(payload_list)}')
 
         connection.commit()
         connection.close()
