@@ -408,6 +408,8 @@ def schedule_worker(
                 watershed_vector = None
                 watershed_layer = None
                 watershed_feature = None
+                # Note we query whether "STICHED" is 1 or not because an
+                # immediate presumes a force
                 cursor.execute(
                     '''
                     SELECT grid_id, scenario_id, raster_id,
