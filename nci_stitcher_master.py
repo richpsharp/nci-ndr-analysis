@@ -431,7 +431,7 @@ def schedule_worker(
                         scenario_id=?
                     ''', (lng_min, lat_min, lng_max, lat_max, scenario_id))
                 # Put this in a set just in case some of the requests overlap
-                grid_set.extend(list(cursor.fetchall()))
+                grid_set.update(list(cursor.fetchall()))
             payload_list = list(grid_set)
             LOGGER.debug(f'immediate payload list: {str(payload_list)}')
         return
