@@ -409,7 +409,8 @@ def schedule_worker(
                 (watershed_basename, fid, scenario_id) = re.match(
                     '(.*)_(\d+)_(.*)', immediate).groups()
                 # get the lat/lng bounds of the watershed
-                watershed_vector = WATERSHED_PATH_MAP[watershed_basename]
+                watershed_vector = gdal.OpenEx(
+                    WATERSHED_PATH_MAP[watershed_basename], gdal.OF_VECTOR)
                 watershed_layer = watershed_vector.GetLayer()
                 watershed_feature = watershed_layer.GetFeature(fid)
                 lng_min, lat_min, lng_max, lat_max = shapely.wkt.loads(
