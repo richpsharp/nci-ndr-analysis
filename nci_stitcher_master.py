@@ -14,6 +14,7 @@ import os
 import multiprocessing
 import pathlib
 import queue
+import re
 import sqlite3
 import subprocess
 import sys
@@ -159,7 +160,7 @@ class WorkerStateSet(object):
 def new_host_monitor(reschedule_queue, worker_list=None):
     """Watch for AWS worker instances on the network.
 
-    Parameters:
+    Args:
         reschedule_queue (queue.Queue): if a worker is working on a task but
             then fails this function will put the job to restart in this queue.
         worker_list (list): if not not this is a list of ip:port strings that
@@ -282,7 +283,8 @@ SCENARIO_ID_LIST = [
     'fixedarea_bmps_rainfed',
     'fixedarea_intensified_irrigated',
     'fixedarea_intensified_rainfed',
-    'global_potential_vegetation',]
+    'global_potential_vegetation',
+    ]
 
 GLOBAL_STITCH_MAP = {
     # 'stream': (
@@ -301,7 +303,7 @@ GLOBAL_STITCH_MAP = {
 def create_status_database(database_path, complete_token_path):
     """Create a runtime status database if it doesn't exist.
 
-    Parameters:
+    Args:
         database_path (str): path to database to create.
         complete_token_path (str): path to a text file that will be created
             by this function written with the timestamp when it finishes.
@@ -357,14 +359,18 @@ def create_status_database(database_path, complete_token_path):
 
 
 def schedule_worker(
-        global_lng_min, global_lat_min, global_lng_max, global_lat_max):
+        global_lng_min, global_lat_min, global_lng_max, global_lat_max,
+        watershed_fid_scenario_immedates):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
-    Parameters:
+    Args:
         global_lng_min (float): min lng value to process region (for debugging)
         global_lat_min (float): min lat value to process region (for debugging)
         global_lng_max (float): max lng value to process region (for debugging)
         global_lat_max (float): max lat value to process region (for debugging)
+        watershed_fid_scenario_immedates (list): if not None, a list of
+            [watershed_base]_[fid]_[scenario_id] to stitch no matter what the
+            status database is.
 
     Returns:
         None.
@@ -378,13 +384,18 @@ def schedule_worker(
         connection = sqlite3.connect(ro_uri, uri=True)
         cursor = connection.cursor()
         LOGGER.debug('querying unstitched')
-        cursor.execute(
-            'SELECT grid_id, scenario_id, raster_id, '
-            'lng_min, lat_min, lng_max, lat_max '
-            'FROM job_status WHERE stitched=0 AND '
-            'lng_min >= ? AND lat_min >= ? AND lng_max <= ? AND lat_max <= ?',
-            (global_lng_min, global_lat_min, global_lng_max, global_lat_max))
-        payload_list = list(cursor.fetchall())
+        if not watershed_fid_scenario_immedates:
+            cursor.execute(
+                'SELECT grid_id, scenario_id, raster_id, '
+                'lng_min, lat_min, lng_max, lat_max '
+                'FROM job_status WHERE stitched=0 AND '
+                'lng_min >= ? AND lat_min >= ? AND lng_max <= ? AND lat_max <= ?',
+                (global_lng_min, global_lat_min, global_lng_max, global_lat_max))
+            payload_list = list(cursor.fetchall())
+        else:
+            for immediate in watershed_fid_scenario_immedates:
+                (watershed_basename, fid, scenario_id) = re.match(
+                    '(.*)_(\d+)_(.*)', immediate).groups()
         connection.commit()
         connection.close()
 
@@ -434,7 +445,7 @@ def processing_complete():
 def global_stitcher(result_queue):
     """Worker to stitch global raster.
 
-    Parameters:
+    Args:
         result_queue (multiprocessing.Queue): this queue will dump payloads
             that are ready to stitch.
 
@@ -519,7 +530,7 @@ def global_stitcher(result_queue):
 def send_job(job_payload):
     """Send a job tuple to the worker pool.
 
-    Parameters:
+    Args:
         job_payload (dict): a dictionary with information to send to the worker
             process. This description is general so it's easy to change the
             data without changing the pipeline.
@@ -581,7 +592,7 @@ def make_empty_wgs84_raster(
         token_data, target_token_complete_path):
     """Make a big empty raster in WGS84 projection.
 
-    Parameters:
+    Args:
         cell_size (float): this is the desired cell size in WSG84 degree
             units.
         nodata_value (float): desired nodata avlue of target raster
@@ -634,7 +645,7 @@ def make_empty_wgs84_raster(
 def worker_status_monitor(reschedule_queue):
     """Monitor the status of watershed workers and reschedule if down.
 
-    Parameters:
+    Args:
         reschedule_queue (queue): if a host fails put the job on this queue.
 
     Returns:
@@ -682,7 +693,7 @@ def worker_status_monitor(reschedule_queue):
 def reschedule_worker(reschedule_queue):
     """Reschedule any jobs that come through the schedule queue.
 
-    Parameters:
+    Args:
         reschedule_queue (queue.Queue): queue that has jobs to reschedule.
 
     Returns:
@@ -714,6 +725,12 @@ if __name__ == '__main__':
         '--global_bounding_box', type=float, nargs=4, default=(
             -181, -91, 181, 91),
         help="[lng_min, lat_min, lng_max, lat_max] global bounds.")
+    parser.add_argument(
+        '--watershed_fid_scenario_immedates', type=str, nargs='+',
+        default=None, help=(
+            'list of `(watershed)_(fid)_(scenario_id)` identifiers to run '
+            'instead of database'))
+
     args = parser.parse_args()
 
     for dir_path in [
@@ -778,7 +795,8 @@ if __name__ == '__main__':
 
     scheduling_thread = threading.Thread(
         target=schedule_worker,
-        args=args.global_bounding_box)
+        args=(
+            *args.global_bounding_box, args.watershed_fid_scenario_immedates))
     scheduling_thread.start()
 
     reschedule_worker_thread = threading.Thread(

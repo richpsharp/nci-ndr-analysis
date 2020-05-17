@@ -561,7 +561,6 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
             LOGGER.debug(
                 'running in immediate mode for these watersheds: %s',
                 payload_list)
-            sys.exit()
 
         watershed_fid_tuple_list = []
         total_expected_runtime = 0.0
