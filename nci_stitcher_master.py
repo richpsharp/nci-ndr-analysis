@@ -403,7 +403,7 @@ def schedule_worker(
                 watershed_vector = WATERSHED_PATH_MAP[watershed_basename]
                 watershed_layer = watershed_vector.GetLayer()
                 watershed_feature = watershed_layer.GetFeature(fid)
-                lng_min, lat_mi, lng_max, lat_max = shapely.wkt.loads(
+                lng_min, lat_min, lng_max, lat_max = shapely.wkt.loads(
                     watershed_feature.GetGeometryRef().ExportToWkt()).bounds
                 watershed_vector = None
                 watershed_layer = None
@@ -417,8 +417,9 @@ def schedule_worker(
                     FROM job_status
                     WHERE
                         lng_min >= ? AND lat_min >= ? AND
-                        lng_max <= ? AND lat_max <= ?
-                    ''', (lng_min, lat_mi, lng_max, lat_max))
+                        lng_max <= ? AND lat_max <= ? AND
+                        scenario_id=?
+                    ''', (lng_min, lat_min, lng_max, lat_max, scenario_id))
                 # Put this in a set just in case some of the requests overlap
                 grid_set.extend(list(cursor.fetchall()))
             payload_list = list(grid_set)
