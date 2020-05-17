@@ -827,19 +827,19 @@ if __name__ == '__main__':
             target_token_complete_path = os.path.join(
                 CHURN_DIR, '%s.COMPLETE' % os.path.basename(
                     global_stitch_raster_path))
-            task_graph.add_task(
-                func=make_empty_wgs84_raster,
-                args=(
-                    (GLOBAL_STITCH_WGS84_CELL_SIZE,
-                     -GLOBAL_STITCH_WGS84_CELL_SIZE), GLOBAL_STITCH_NODATA,
-                    gdal.GDT_Float32, global_stitch_raster_path,
-                    os.path.splitext(os.path.basename(
-                        target_token_complete_path))[0],
-                    target_token_complete_path),
-                target_path_list=[target_token_complete_path],
-                ignore_path_list=[global_stitch_raster_path],
-                task_name='create empty global raster for %s' % (
-                    os.path.basename(global_stitch_raster_path)))
+            # task_graph.add_task(
+            #     func=make_empty_wgs84_raster,
+            #     args=(
+            #         (GLOBAL_STITCH_WGS84_CELL_SIZE,
+            #          -GLOBAL_STITCH_WGS84_CELL_SIZE), GLOBAL_STITCH_NODATA,
+            #         gdal.GDT_Float32, global_stitch_raster_path,
+            #         os.path.splitext(os.path.basename(
+            #             target_token_complete_path))[0],
+            #         target_token_complete_path),
+            #     target_path_list=[target_token_complete_path],
+            #     ignore_path_list=[global_stitch_raster_path],
+            #     task_name='create empty global raster for %s' % (
+            #         os.path.basename(global_stitch_raster_path)))
 
     global RESULT_QUEUE
     RESULT_QUEUE = multiprocessing.Queue()
