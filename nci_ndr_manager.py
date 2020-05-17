@@ -837,7 +837,7 @@ if __name__ == '__main__':
     schedule_worker_thread = threading.Thread(
         target=schedule_worker,
         args=(
-            args.watershed_fid_immedates, args.max_to_send_to_worker))
+            args.watershed_fid_scenario_immedates, args.max_to_send_to_worker))
     schedule_worker_thread.start()
 
     new_host_monitor_thread = threading.Thread(
