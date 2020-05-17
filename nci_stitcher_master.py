@@ -794,7 +794,7 @@ if __name__ == '__main__':
         ECOSHARD_DIR, os.path.basename(WATERSHEDS_URL))
     download_watersheds_task = task_graph.add_task(
         func=ecoshard.download_url,
-        args=(WATERSHEDS_URL, ECOSHARD_DIR),
+        args=(WATERSHEDS_URL, watersheds_zip_path),
         target_path_list=[watersheds_zip_path],
         task_name='download %s' % WATERSHEDS_URL)
 
