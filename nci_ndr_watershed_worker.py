@@ -8,7 +8,6 @@ a RESTful API.
 import argparse
 import datetime
 import glob
-import json
 import logging
 import multiprocessing
 import os
@@ -511,7 +510,7 @@ def reproject_geometry_to_target(
     Transforms the features of the base vector to the desired output
     projection in a new ESRI Shapefile.
 
-    Parameters:
+    Args:
         vector_path (str): path to vector
         feature_id (int): feature ID to reproject.
         target_sr_wkt (str): the desired output projection in Well Known Text
@@ -579,7 +578,7 @@ def reproject_geometry_to_target(
 def get_utm_epsg_srs(vector_path, fid):
     """Calculate the EPSG SRS of the watershed at the given feature.
 
-    Parameters:
+    Args:
         vector_path (str): path to a vector in a wgs84 projection.
         fid (int): valid feature id in vector that will be used to
             calculate the UTM EPSG code.
@@ -609,7 +608,7 @@ def zipdir(dir_path, target_file):
 
     Recurisvely zips the contents of `dir_path` to `target_file`.
 
-    Parameters:
+    Args:
         dir_path (str): path to a directory.
         target_file (str): path to target zipfile.
 

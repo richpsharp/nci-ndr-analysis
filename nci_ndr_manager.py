@@ -26,8 +26,6 @@ from osgeo import gdal
 from osgeo import osr
 import flask
 import ecoshard
-import numpy
-import pygeoprocessing
 import requests
 import retrying
 import shapely.strtree
@@ -64,7 +62,6 @@ COUNTRY_BORDERS_URL = (
     'world_borders_md5_c8dd971a8a853b2f3e1d3801b9747d5f.gpkg')
 
 WORKSPACE_DIR = 'workspace_manager'
-STITCH_DIR = os.path.join(WORKSPACE_DIR, 'stitch_workspace')
 ECOSHARD_DIR = os.path.join(WORKSPACE_DIR, 'ecoshards')
 CHURN_DIR = os.path.join(WORKSPACE_DIR, 'churn')
 STATUS_DATABASE_PATH = os.path.join(CHURN_DIR, 'status_database.sqlite3')
@@ -111,7 +108,9 @@ APP = flask.Flask(__name__)
 
 
 class WorkerStateSet(object):
+    """Object to manage which workers are found, active, dead."""
     def __init__(self):
+        """Create new object, no parameters."""
         self.lock = threading.Lock()
         self.host_ready_event = threading.Event()
         self.ready_host_set = set()
@@ -144,6 +143,7 @@ class WorkerStateSet(object):
             return ready_host
 
     def get_counts(self):
+        """Return number of running hosts and ready hosts."""
         with self.lock:
             return len(self.running_host_set), len(self.ready_host_set)
 
@@ -168,8 +168,8 @@ class WorkerStateSet(object):
     def update_host_set(self, active_host_set):
         """Remove hosts not in `active_host_set`.
 
-            Returns:
-                set of removed hosts.
+        Returns:
+            set of removed hosts.
 
         """
         with self.lock:
@@ -262,32 +262,12 @@ def unzip_file(zip_path, target_directory, token_file):
         token_file.write(str(datetime.datetime.now()))
 
 
-@retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=10000)
-def create_index(database_path):
-    """Create an index on the database if it doesn't exist."""
-    try:
-        create_index_sql = (
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS watershed_fid_index
-            ON job_status (watershed_basename, fid);
-            """)
-        connection = sqlite3.connect(database_path)
-        cursor = connection.cursor()
-        cursor.executescript(create_index_sql)
-    except Exception:
-        LOGGER.exception('exception create_index')
-        raise
-    finally:
-        connection.commit()
-        connection.close()
-
-
 def create_status_database(
         database_path, watersheds_dir_path, country_borders_path,
         complete_token_path):
     """Create the initial database that monitors execution status.
 
-    Parameters:
+    Args:
         database_path (str): path to SQLite database that's created by this
             call.
         watersheds_dir_path (str): path to a directory containing .shp files
@@ -308,10 +288,10 @@ def create_status_database(
             watershed_basename TEXT NOT NULL,
             fid INT NOT NULL,
             watershed_area_deg REAL NOT NULL,
+            scenario_id TEXT NOT NULL,
             job_status TEXT NOT NULL,
             country_list TEXT NOT NULL,
-            workspace_urls_json TEXT,
-            stiched INT NOT NULL);
+            workspace_urls_json TEXT);
         """)
     if os.path.exists(database_path):
         os.remove(database_path)
@@ -332,10 +312,12 @@ def create_status_database(
 
     str_tree = shapely.strtree.STRtree(world_border_polygon_list)
     insert_query = (
-        'INSERT INTO job_status('
-        'watershed_basename, fid, watershed_area_deg, job_status, '
-        'country_list, workspace_urls_json, stiched) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?)')
+        '''
+        INSERT INTO job_status(
+        watershed_basename, fid, watershed_area_deg, scenario_id, job_status,
+        country_list, workspace_urls_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ''')
 
     for watershed_shape_path in [str(p) for p in pathlib.Path(
             watersheds_dir_path).rglob('*.shp')]:
@@ -365,9 +347,10 @@ def create_status_database(
                 # watershed is not in any country, so lets not run it
                 continue
             country_names = ','.join(country_name_list)
-            job_status_list.append(
-                (watershed_basename, fid, watershed_geom.area, 'PRESCHEDULED',
-                 country_names, None, 0))
+            for scenario_id in SCENARIO_ID_LIST:
+                job_status_list.append(
+                    (watershed_basename, fid, watershed_geom.area, scenario_id,
+                     'PRESCHEDULED', country_names, None))
             if (index+1) % 10000 == 0:
                 LOGGER.debug(
                     'every 10000 inserting %s watersheds into DB',
@@ -400,11 +383,6 @@ def processing_status():
             'where job_status=\'PRESCHEDULED\'')
         prescheduled_count = int(cursor.fetchone()[0])
 
-        cursor.execute(
-            'SELECT count(1) FROM job_status '
-            'WHERE (stiched=1)')
-        stitched_count = int(cursor.fetchone()[0])
-
         connection.commit()
         connection.close()
         processed_count = total_count - prescheduled_count
@@ -431,7 +409,6 @@ def processing_status():
         LOGGER.debug('vars: %s' % str(
             (processed_count/total_count*100, processed_count,
                 total_count, total_count - processed_count,
-                stitched_count/total_count*100, stitched_count,
                 approx_time_left_str,
                 processing_rate,
                 uptime_str,
@@ -459,7 +436,8 @@ def processing_status():
         with GLOBAL_LOCK:
             result_string += 'what\'s running:<br>'
             for session_id, payload in sorted(SCHEDULED_MAP.items()):
-                LOGGER.debug('%s %s', session_id, len(payload['watershed_fid_tuple_list']))
+                LOGGER.debug('%s %s', session_id, len(
+                    payload['watershed_fid_tuple_list']))
                 result_string += '* %s running %d watersheds (%s)<br>' % (
                     payload['host'], len(payload['watershed_fid_tuple_list']),
                     session_id)
@@ -539,7 +517,7 @@ def job_status_updater():
 def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
     """Monitors STATUS_DATABASE_PATH and schedules work.
 
-    Parameters:
+    Args:
         immediate_watershed_fid_list (tuple): If not `None` this funciton will
             execute NDR only on the `watershed_basename_fid` strings in this
             list. If `None` this function will loop through the uncompleted
@@ -563,9 +541,11 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
             cursor = connection.cursor()
             LOGGER.debug('querying prescheduled')
             cursor.execute(
-                'SELECT watershed_basename, fid, watershed_area_deg '
-                'FROM job_status '
-                'WHERE job_status=\'PRESCHEDULED\'')
+                '''
+                SELECT watershed_basename, fid, watershed_area_deg, scenario_id
+                FROM job_status
+                WHERE job_status='PRESCHEDULED'
+                ''')
             payload_list = list(cursor.fetchall())
             connection.commit()
             connection.close()
@@ -583,11 +563,11 @@ def schedule_worker(immediate_watershed_fid_list, max_to_send_to_worker):
         total_expected_runtime = 0.0
 
         for payload in payload_list:
-            watershed_basename, fid, watershed_area_deg = payload
+            watershed_basename, fid, watershed_area_deg, scenario_id = payload
             fid = int(fid)  # I encountered a string, this prevents that.
             total_expected_runtime += TIME_PER_AREA * watershed_area_deg
             watershed_fid_tuple_list.append(
-                (watershed_basename, fid, watershed_area_deg))
+                (watershed_basename, fid, watershed_area_deg, scenario_id))
             if total_expected_runtime > TIME_PER_WORKER or (
                     len(watershed_fid_tuple_list) > max_to_send_to_worker):
                 LOGGER.debug(
@@ -613,12 +593,13 @@ def reschedule_worker():
 
 
 @retrying.retry(wait_exponential_multiplier=1000, wait_exponential_max=5000)
-def send_job(watershed_fid_tuple_list, scenario_id):
+def send_job(watershed_fid_tuple_list):
     """Send watershed/fid to the global execution pool.
 
-    Parameters:
+    Args:
         watershed_fid_tuple_list (list): list of
-            (watershed_basename, fid, watershed_area)
+            (watershed_fid_tuple_list, callback_url, bucket_uri_prefix,
+            session_id) tuples
 
     Returns:
         None.
@@ -637,7 +618,6 @@ def send_job(watershed_fid_tuple_list, scenario_id):
         LOGGER.debug('this is the session id: %s', session_id)
         data_payload = {
             'watershed_fid_tuple_list': watershed_fid_tuple_list,
-            'scenario_id': scenario_id,
             'callback_url': callback_url,
             'bucket_uri_prefix': BUCKET_URI_PREFIX,
             'session_id': session_id,
@@ -765,7 +745,7 @@ def make_empty_wgs84_raster(
         target_token_complete_path):
     """Make a big empty raster in WGS84 projection.
 
-    Parameters:
+    Args:
         cell_size (float): this is the desired cell size in WSG84 degree
             units.
         nodata_value (float): desired nodata avlue of target raster
@@ -810,212 +790,6 @@ def make_empty_wgs84_raster(
             target_token_file.write('complete!')
 
 
-@retrying.retry()
-def stitch_into(master_raster_path, base_raster_path, nodata_value):
-    """Stitch `base`into `master` by only overwriting non-nodata values."""
-    try:
-        global_raster_info = pygeoprocessing.get_raster_info(
-            master_raster_path)
-        global_raster = gdal.OpenEx(
-            master_raster_path, gdal.OF_RASTER | gdal.GA_Update)
-        global_band = global_raster.GetRasterBand(1)
-        global_inv_gt = gdal.InvGeoTransform(
-            global_raster_info['geotransform'])
-        warp_dir = os.path.dirname(base_raster_path)
-        warp_raster_path = os.path.join(
-            warp_dir, os.path.basename(base_raster_path))
-        pygeoprocessing.warp_raster(
-            base_raster_path, global_raster_info['pixel_size'],
-            warp_raster_path, 'near',
-            target_sr_wkt=global_raster_info['projection'])
-        warp_info = pygeoprocessing.get_raster_info(warp_raster_path)
-        warp_bb = warp_info['bounding_box']
-
-        # recall that y goes down as j goes up, so min y is max j
-        global_i_min, global_j_max = [
-            int(round(x)) for x in gdal.ApplyGeoTransform(
-                global_inv_gt, warp_bb[0], warp_bb[1])]
-        global_i_max, global_j_min = [
-            int(round(x)) for x in gdal.ApplyGeoTransform(
-                global_inv_gt, warp_bb[2], warp_bb[3])]
-
-        if (global_i_min >= global_raster.RasterXSize or
-                global_j_min >= global_raster.RasterYSize or
-                global_i_max < 0 or global_j_max < 0):
-            LOGGER.debug(global_raster_info)
-            raise ValueError(
-                '%f %f %f %f out of bounds (%d, %d)',
-                global_i_min, global_j_min,
-                global_i_max, global_j_max,
-                global_raster.RasterXSize,
-                global_raster.RasterYSize)
-
-        # clamp to fit in the global i/j rasters
-        stitch_i = 0
-        stitch_j = 0
-        if global_i_min < 0:
-            stitch_i = -global_i_min
-            global_i_min = 0
-        if global_j_min < 0:
-            stitch_j = -global_j_min
-            global_j_min = 0
-        global_i_max = min(global_raster.RasterXSize, global_i_max)
-        global_j_max = min(global_raster.RasterYSize, global_j_max)
-        stitch_x_size = global_i_max - global_i_min
-        stitch_y_size = global_j_max - global_j_min
-
-        stitch_raster = gdal.OpenEx(warp_raster_path, gdal.OF_RASTER)
-
-        if stitch_i + stitch_x_size > stitch_raster.RasterXSize:
-            stitch_x_size = stitch_raster.RasterXSize - stitch_i
-        if stitch_j + stitch_y_size > stitch_raster.RasterYSize:
-            stitch_y_size = stitch_raster.RasterYSize - stitch_j
-
-        global_array = global_band.ReadAsArray(
-            global_i_min, global_j_min,
-            global_i_max-global_i_min,
-            global_j_max-global_j_min)
-
-        stitch_nodata = warp_info['nodata'][0]
-
-        stitch_array = stitch_raster.ReadAsArray(
-            stitch_i, stitch_j, stitch_x_size, stitch_y_size)
-        valid_stitch = (
-            ~numpy.isclose(stitch_array, stitch_nodata))
-        if global_array.size != stitch_array.size:
-            raise ValueError(
-                "global not equal to stitch:\n"
-                "%d %d %d %d\n%d %d %d %d",
-                global_i_min, global_j_min,
-                global_i_max-global_i_min,
-                global_j_max-global_j_min,
-                stitch_i, stitch_j, stitch_x_size, stitch_y_size)
-
-        global_array[valid_stitch] = stitch_array[valid_stitch]
-        global_band.WriteArray(
-            global_array, xoff=global_i_min, yoff=global_j_min)
-        global_band = None
-    except Exception:
-        LOGGER.exception('error on stitch into')
-    finally:
-        pass  # os.remove(wgs84_base_raster_path)
-
-
-# def stitch_worker():
-#     """Mange the stitching of a raster."""
-#     try:
-#         stitch_raster_path_map = {}
-#         task_graph = taskgraph.TaskGraph(STITCH_DIR, -1)
-#         for raster_id, (path_prefix, gdal_type, nodata_value) in (
-#                 GLOBAL_STITCH_MAP.items()):
-#             stitch_raster_path_map[raster_id] = {}
-#             for scenario_id in SCENARIO_ID_LIST:
-#                 stitch_raster_path = os.path.join(
-#                     STITCH_DIR, '%s_%s.tif' % (scenario_id, raster_id))
-#                 stitch_raster_path_map[raster_id][scenario_id] = (
-#                     stitch_raster_path)
-#                 stitch_raster_token_path = '%s.CREATED' % (
-#                     os.path.splitext(stitch_raster_path)[0])
-#                 task_graph.add_task(
-#                     func=make_empty_wgs84_raster,
-#                     args=(
-#                         GLOBAL_STITCH_WGS84_CELL_SIZE, nodata_value, gdal_type,
-#                         stitch_raster_path, stitch_raster_token_path),
-#                     target_path_list=[stitch_raster_token_path],
-#                     task_name='make base %s (%s)' % (raster_id, scenario_id))
-#         task_graph.join()
-#     except Exception:
-#         LOGGER.exception('ERROR on stiched worker %s', traceback.format_exc())
-
-#     # This section can be uncommented for debugging in the case of wanting to
-#     # reset all the stitched rasters
-#     # connection = sqlite3.connect(STATUS_DATABASE_PATH)
-#     # cursor = connection.cursor()
-#     # update_stiched_record = 'UPDATE job_status SET stiched=0 WHERE stiched=1'
-#     # cursor.execute(update_stiched_record)
-#     # connection.commit()
-#     # connection.close()
-#     # cursor = None
-
-#     while True:
-#         # update the stitch with the latest.
-#         time.sleep(1)
-#         try:
-#             LOGGER.debug('searching for a new stitch')
-#             select_not_processed = (
-#                 'SELECT watershed_basename, fid, workspace_urls_json '
-#                 'FROM job_status '
-#                 'WHERE (stiched = 0) '
-#                 'AND workspace_urls_json IS NOT NULL LIMIT 100')
-#             connection = sqlite3.connect(STATUS_DATABASE_PATH)
-#             cursor = connection.cursor()
-#             cursor.execute(select_not_processed)
-#             update_ws_fid_list = list(cursor.fetchall())
-#             connection.commit()
-#             connection.close()
-#             cursor = None
-#             LOGGER.debug('query string: %s', select_not_processed)
-#             LOGGER.debug('length of update list: %s', len(update_ws_fid_list))
-#             stitched_basename_id_list = []
-#             for watershed_basename, fid, workspace_urls_json in (
-#                     update_ws_fid_list):
-#                 workspace_url_map = json.loads(workspace_urls_json)
-#                 for scenario_id, workspace_url in workspace_url_map.items():
-#                     workspace_zip_path = os.path.join(
-#                         STITCH_DIR, os.path.basename(workspace_url))
-#                     LOGGER.debug('download url: %s', workspace_url)
-#                     download_url(workspace_url, workspace_zip_path)
-#                     for raster_id, (path_prefix, gdal_type, nodata_value) in (
-#                             GLOBAL_STITCH_MAP.items()):
-#                         LOGGER.debug('processing raster %s', raster_id)
-#                         zipped_path = path_prefix.replace(
-#                             '[BASENAME]', watershed_basename).replace(
-#                             '[FID]', str(fid))
-#                         local_zip_dir = os.path.join(STITCH_DIR, '%s_%s' % (
-#                             watershed_basename, fid))
-#                         with zipfile.ZipFile(workspace_zip_path, 'r') as \
-#                                 zip_ref:
-#                             zip_ref.extract(zipped_path, local_zip_dir)
-#                         LOGGER.debug(
-#                             'stitching %s %s in %s', watershed_basename, fid,
-#                             raster_id)
-#                         local_path = os.path.join(local_zip_dir, zipped_path)
-#                         stitch_into(
-#                             stitch_raster_path_map[raster_id][scenario_id],
-#                             local_path, nodata_value)
-#                     os.remove(workspace_zip_path)
-#                     shutil.rmtree(local_zip_dir)
-#                     stitched_basename_id_list.append((watershed_basename, fid))
-
-#                 while True:
-#                     try:
-#                         connection = sqlite3.connect(STATUS_DATABASE_PATH)
-#                         cursor = connection.cursor()
-#                         update_stiched_record = (
-#                             'UPDATE job_status '
-#                             'SET stiched=1 '
-#                             'WHERE watershed_basename=? AND fid=?')
-#                         LOGGER.debug(
-#                             'attempting update %s', update_stiched_record)
-#                         cursor.executemany(
-#                             update_stiched_record, stitched_basename_id_list)
-#                         LOGGER.debug(
-#                             'updated record! %s %s',
-#                             watershed_basename, fid)
-#                         break
-#                     except Exception:
-#                         LOGGER.exception(
-#                             'exception when updating stiched status')
-#                     finally:
-#                         connection.commit()
-#                         connection.close()
-#                         LOGGER.debug(
-#                             'updated stitch database with %s',
-#                             stitched_basename_id_list)
-#         except Exception:
-#             LOGGER.exception('exception in stich worker')
-
-
 @retrying.retry(
     wait_exponential_multiplier=1000, wait_exponential_max=10000)
 def download_url(source_url, target_path):
@@ -1048,8 +822,6 @@ if __name__ == '__main__':
 
     LOGGER.debug('initalizing')
     initialize()
-    LOGGER.debug('create database index')
-    create_index(STATUS_DATABASE_PATH)
 
     LOGGER.debug('start threading')
     worker_status_monitor_thread = threading.Thread(
