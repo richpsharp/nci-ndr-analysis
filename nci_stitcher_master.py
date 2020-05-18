@@ -415,7 +415,7 @@ def schedule_worker(
                 watershed_feature = watershed_layer.GetFeature(int(fid))
                 lng_min, lat_min, lng_max, lat_max = shapely.wkt.loads(
                     watershed_feature.GetGeometryRef().ExportToWkt()).bounds
-                # make sure it gets the whoel grids:
+                # make sure it gets the whole grids:
                 lng_min = lng_min-2
                 lat_min = lat_min-2
                 lng_max = lng_max+2
