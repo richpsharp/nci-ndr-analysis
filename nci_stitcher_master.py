@@ -301,8 +301,11 @@ GLOBAL_STITCH_MAP = {
     # 'stream': (
     #     'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/stream.tif',
     #     gdal.GDT_Byte, 255),
-    'n_export': (
-        'workspace_worker/[BASENAME]_[FID]/n_export.tif',
+    # 'n_export': (
+    #     'workspace_worker/[BASENAME]_[FID]/n_export.tif',
+    #     gdal.GDT_Float32, -1),
+    'n_load': (
+        'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/load_n.tif',
         gdal.GDT_Float32, -1),
     # 'modified_load_n': (
     #     'workspace_worker/[BASENAME]_[FID]/intermediate_outputs/'
