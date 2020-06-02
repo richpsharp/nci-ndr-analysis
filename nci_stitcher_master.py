@@ -227,7 +227,7 @@ def unzip_file(zip_path, target_directory, token_file):
 
 @APP.route('/api/v1/processing_status', methods=['GET'])
 def processing_status():
-    """Download necessary data and initalize empty rasters if needed."""
+    """Download necessary data and initialize empty rasters if needed."""
     try:
         ro_uri = 'file://%s?mode=ro' % os.path.abspath(STATUS_DATABASE_PATH)
         connection = sqlite3.connect(ro_uri, uri=True)
@@ -680,7 +680,8 @@ def make_empty_wgs84_raster(
     target_raster.SetGeoTransform(geotransform)
     target_band = target_raster.GetRasterBand(1)
     target_band.SetNoDataValue(nodata_value)
-    target_band.Fill(nodata_value)
+    # no need to fill up with nodata becaUse not filling is nodata
+    #target_band.Fill(nodata_value)
     target_band = None
     target_raster = None
 
