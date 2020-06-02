@@ -54,9 +54,6 @@ APP = flask.Flask(__name__)
 PATH_MAP = {}
 TARGET_PIXEL_SIZE = (90, -90)
 
-RASTER_PATH_BASE_LIST = [
-    'n_export.tif', 'intermediate_outputs/modified_load_n.tif']
-
 AWS_BASE_URL = (
     'https://nci-ecoshards.s3-us-west-1.amazonaws.com/ndr_scenarios/')
 
